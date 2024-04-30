@@ -188,7 +188,7 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
 
         if (!tokenValidated) {
             LOGGER.error(errMsg.toString());
-            throw forbiddenError("Unable to validate Certificate Request Auth Token");
+            throw forbiddenError("Unable to validate Certificate Request Auth Token: " + errMsg);
         }
 
         final String clientIp = InstanceUtils.getInstanceProperty(instanceAttributes,
