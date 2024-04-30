@@ -577,7 +577,6 @@ public class InstanceServerCertProvider implements InstanceProvider {
         }
         for (String dnsSuffix : dnsSuffixes) {
             hostNameSuffixList.add("." + reversedSubDomain + "." + dnsSuffix);
-            LOGGER.error("domain: {}, hostNameSuffixList: {}", domain, reversedSubDomain);
         }
 
         // generate our cluster based names if we have clusters configured
@@ -597,6 +596,10 @@ public class InstanceServerCertProvider implements InstanceProvider {
         if (validateHostname) {
             final String hostname = InstanceUtils.getInstanceProperty(attributes, InstanceProvider.ZTS_INSTANCE_HOSTNAME);
             if (!StringUtil.isEmpty(hostname) && !InstanceUtils.validateSanDnsName(hostname, service, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet)) {
+                LOGGER.error("InstanceUtils.validateSanDnsName() failed with " +
+                        "domain: {}, reversedSubDomain: {}, service: {}, hostname: {}, " +
+                        "hostNameSuffixList: {}, k8sDnsSuffixes: {}, clusterNameSet: {}",
+                        domain, reversedSubDomain, service, hostname, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet);
                 return false;
             }
         }
