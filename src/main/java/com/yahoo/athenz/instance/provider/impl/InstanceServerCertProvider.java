@@ -623,6 +623,10 @@ public class InstanceServerCertProvider implements InstanceProvider {
                 // of the failed hostname and continue with the rest of the list
 
                 if (failedDnsNames == null) {
+                    LOGGER.error("InstanceUtils.validateSanDnsName() failed with " +
+                            "domain: {}, reversedSubDomain: {}, service: {}, host: {}, " +
+                            "hostNameSuffixList: {}, k8sDnsSuffixes: {}, clusterNameSet: {}",
+                            domain, reversedSubDomain, service, host, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet);
                     return false;
                 } else {
                     failedDnsNames.add(host);
@@ -639,6 +643,10 @@ public class InstanceServerCertProvider implements InstanceProvider {
         // failure of not being able to validate the specified entries
 
         if (!hostCheck) {
+            LOGGER.error("hostCheck failed with " +
+                    "domain: {}, reversedSubDomain: {}, service: {}, failedDnsNames: {}, " +
+                    "hostNameSuffixList: {}, k8sDnsSuffixes: {}, clusterNameSet: {}",
+                    domain, reversedSubDomain, service, failedDnsNames, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet);
             LOGGER.error("Request does not contain expected host SAN DNS entry");
             if (failedDnsNames != null) {
                 failedDnsNames.clear();
