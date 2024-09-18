@@ -1,18 +1,3 @@
-/*
- * Copyright The Athenz Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.yahoo.athenz.instance.provider.impl;
 
 import com.yahoo.athenz.auth.Authorizer;
@@ -66,6 +51,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     String provider = null;
     String audience = null;
     JwtsSigningKeyResolver signingKeyResolver = null;
+    JwtsSigningKeyResolver keyStoreSigningKeyResolver = null;
     Authorizer authorizer = null;
     DynamicConfigLong bootTimeOffsetSeconds;
     long certExpiryTime;
@@ -107,6 +93,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         jenkinsIssuer = System.getProperty(JENKINS_PROP_ISSUER, JENKINS_ISSUER);
         signingKeyResolver = new JwtsSigningKeyResolver(extractJenkinsIssuerJwksUri(jenkinsIssuer), null);
+        keyStoreSigningKeyResolver = new JwtsSigningKeyResolver(null, null);
     }
 
     HttpDriver getHttpDriver(String url) {
@@ -262,9 +249,18 @@ public class InstanceJenkinsProvider implements InstanceProvider {
                     .setAllowedClockSkewSeconds(60)
                     .build()
                     .parseClaimsJws(jwToken);
-        } catch (Exception ex) {
-            errMsg.append("Unable to parse and validate token: ").append(ex.getMessage());
-            return false;
+        } catch (Exception e) {
+            errMsg.append("Unable to parse and validate token with JWKs: ").append(e.getMessage());
+            try {
+                 claims = Jwts.parserBuilder()
+                        .setSigningKeyResolver(keyStoreSigningKeyResolver)
+                        .setAllowedClockSkewSeconds(60)
+                        .build()
+                        .parseClaimsJws(jwToken);
+            } catch (Exception ex) {
+                errMsg.append("Unable to parse and validate token with Key Store: ").append(ex.getMessage());
+            	return false;
+            }
         }
 
         // verify the issuer in set to GitHub Actions
