@@ -1,18 +1,3 @@
-/*
- * Copyright The Athenz Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.yahoo.athenz.instance.provider.impl;
 
 import com.yahoo.athenz.auth.Authorizer;
@@ -31,7 +16,6 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.security.PrivateKey;
 import java.time.Instant;
 import java.util.Date;
@@ -200,7 +184,7 @@ public class InstanceJenkinsProviderTest {
             fail();
         } catch (ResourceException ex) {
             assertEquals(ex.getCode(), 403);
-            assertTrue(ex.getMessage().contains("Unable to validate Certificate Request: Unable to parse and validate token: A signing key must be specified if the specified JWT is digitally signed."));
+            assertTrue(ex.getMessage().contains("Unable to validate Certificate Request: Unable to parse and validate token with JWKs: A signing key must be specified if the specified JWT is digitally signed."));
         }
 
         // once we add the expected public key we should get a failure due to invalid san dns entry
@@ -219,7 +203,7 @@ public class InstanceJenkinsProviderTest {
     public void testConfirmInstanceWithoutAuthorizer() {
         System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_JWKS_URI, "https://config.athenz.io");
         InstanceJenkinsProvider provider = new InstanceJenkinsProvider();
-        provider.initialize("sys.auth.github_actions",
+        provider.initialize("sys.auth.jenkins",
                 "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
         provider.setAuthorizer(null);
         try {
@@ -473,7 +457,7 @@ public class InstanceJenkinsProviderTest {
         assertFalse(result);
         assertTrue(errMsg.toString().contains("authorization check failed for action"));
     }
-
+ 
     private String generateIdToken(final String issuer, long currentTimeSecs, boolean skipSubject,
             boolean skipEventName, boolean skipIssuedAt, boolean skipRunId, boolean skipRepository) {
 
