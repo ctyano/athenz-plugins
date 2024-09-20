@@ -16,6 +16,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.security.PrivateKey;
 import java.time.Instant;
 import java.util.Date;
@@ -61,55 +62,55 @@ public class InstanceJenkinsProviderTest {
         assertNotNull(provider.getHttpDriver("https://config.athenz.io"));
     }
 
-//    @Test
-//    public void testInitializeWithHttpDriver() throws IOException {
-//
-//        // std test where the http driver will return null for the config object
-//
-//    	InstanceJenkinsProviderTestImpl provider = new InstanceJenkinsProviderTestImpl();
-//        HttpDriver httpDriver = Mockito.mock(HttpDriver.class);
-//        provider.setHttpDriver(httpDriver);
-//        provider.initialize("sys.auth.jenkins",
-//                "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
-//        assertNotNull(provider);
-//        assertEquals(provider.signingKeyResolver.getJwksUri(), InstanceJenkinsProvider.JENKINS_ISSUER_JWKS_URI);
-//
-//        // test where the http driver will return a valid config object
-//
-//        provider = new InstanceJenkinsProviderTestImpl();
-//        httpDriver = Mockito.mock(HttpDriver.class);
-//        Mockito.when(httpDriver.doGet("/.well-known/openid-configuration", null))
-//                .thenReturn("{\"jwks_uri\":\"https://athenz.io/jwks\"}");
-//        provider.setHttpDriver(httpDriver);
-//        provider.initialize("sys.auth.jenkins",
-//                "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
-//        assertNotNull(provider);
-//        assertEquals(provider.signingKeyResolver.getJwksUri(), "https://athenz.io/jwks");
-//
-//        // test when http driver return invalid data
-//
-//        provider = new InstanceJenkinsProviderTestImpl();
-//        httpDriver = Mockito.mock(HttpDriver.class);
-//        Mockito.when(httpDriver.doGet("/.well-known/openid-configuration", null))
-//                .thenReturn("invalid-json");
-//        provider.setHttpDriver(httpDriver);
-//        provider.initialize("sys.auth.jenkins",
-//                "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
-//        assertNotNull(provider);
-//        assertEquals(provider.signingKeyResolver.getJwksUri(), InstanceJenkinsProvider.JENKINS_ISSUER_JWKS_URI);
-//
-//        // and finally throwing an exception
-//
-//        provider = new InstanceJenkinsProviderTestImpl();
-//        httpDriver = Mockito.mock(HttpDriver.class);
-//        Mockito.when(httpDriver.doGet("/.well-known/openid-configuration", null))
-//                .thenThrow(new IOException("invalid-json"));
-//        provider.setHttpDriver(httpDriver);
-//        provider.initialize("sys.auth.jenkins",
-//                "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
-//        assertNotNull(provider);
-//        assertEquals(provider.signingKeyResolver.getJwksUri(), InstanceJenkinsProvider.JENKINS_ISSUER_JWKS_URI);
-//    }
+    @Test
+    public void testInitializeWithHttpDriver() throws IOException {
+
+        // std test where the http driver will return null for the config object
+
+    	InstanceJenkinsProviderTestImpl provider = new InstanceJenkinsProviderTestImpl();
+        HttpDriver httpDriver = Mockito.mock(HttpDriver.class);
+        provider.setHttpDriver(httpDriver);
+        provider.initialize("sys.auth.jenkins",
+                "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
+        assertNotNull(provider);
+        assertEquals(provider.signingKeyResolver.getJwksUri(), InstanceJenkinsProvider.JENKINS_ISSUER_JWKS_URI);
+
+        // test where the http driver will return a valid config object
+
+        provider = new InstanceJenkinsProviderTestImpl();
+        httpDriver = Mockito.mock(HttpDriver.class);
+        Mockito.when(httpDriver.doGet("/.well-known/openid-configuration", null))
+                .thenReturn("{\"jwks_uri\":\"https://athenz.io/jwks\"}");
+        provider.setHttpDriver(httpDriver);
+        provider.initialize("sys.auth.jenkins",
+                "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
+        assertNotNull(provider);
+        assertEquals(provider.signingKeyResolver.getJwksUri(), "https://athenz.io/jwks");
+
+        // test when http driver return invalid data
+
+        provider = new InstanceJenkinsProviderTestImpl();
+        httpDriver = Mockito.mock(HttpDriver.class);
+        Mockito.when(httpDriver.doGet("/.well-known/openid-configuration", null))
+                .thenReturn("invalid-json");
+        provider.setHttpDriver(httpDriver);
+        provider.initialize("sys.auth.jenkins",
+                "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
+        assertNotNull(provider);
+        assertEquals(provider.signingKeyResolver.getJwksUri(), InstanceJenkinsProvider.JENKINS_ISSUER_JWKS_URI);
+
+        // and finally throwing an exception
+
+        provider = new InstanceJenkinsProviderTestImpl();
+        httpDriver = Mockito.mock(HttpDriver.class);
+        Mockito.when(httpDriver.doGet("/.well-known/openid-configuration", null))
+                .thenThrow(new IOException("invalid-json"));
+        provider.setHttpDriver(httpDriver);
+        provider.initialize("sys.auth.jenkins",
+                "class://com.yahoo.athenz.instance.provider.impl.InstanceJenkinsProvider", null, null);
+        assertNotNull(provider);
+        assertEquals(provider.signingKeyResolver.getJwksUri(), InstanceJenkinsProvider.JENKINS_ISSUER_JWKS_URI);
+    }
 
     @Test
     public void testConfirmInstance() {
@@ -136,7 +137,7 @@ public class InstanceJenkinsProviderTest {
         confirmation.setDomain("sports");
         confirmation.setService("api");
         confirmation.setProvider("sys.auth.jenkins");
-        confirmation.setAttestationData(generateIdToken("https://token.actions.githubusercontent.com",
+        confirmation.setAttestationData(generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false, false, false, false));
         confirmation.setAttributes(instanceAttributes);
 
@@ -173,7 +174,7 @@ public class InstanceJenkinsProviderTest {
         confirmation.setDomain("sports");
         confirmation.setService("api");
         confirmation.setProvider("sys.auth.jenkins");
-        confirmation.setAttestationData(generateIdToken("https://token.actions.githubusercontent.com",
+        confirmation.setAttestationData(generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false, false, false, false));
         confirmation.setAttributes(instanceAttributes);
 
@@ -184,7 +185,8 @@ public class InstanceJenkinsProviderTest {
             fail();
         } catch (ResourceException ex) {
             assertEquals(ex.getCode(), 403);
-            assertTrue(ex.getMessage().contains("Unable to validate Certificate Request: Unable to parse and validate token with JWKs: A signing key must be specified if the specified JWT is digitally signed."));
+            assertTrue(ex.getMessage().contains("Unable to validate Certificate Request with the provided ID Token: "));
+            assertTrue(ex.getMessage().contains("Unable to parse and validate token with JWKs: A signing key must be specified if the specified JWT is digitally signed."));
         }
 
         // once we add the expected public key we should get a failure due to invalid san dns entry
@@ -259,7 +261,7 @@ public class InstanceJenkinsProviderTest {
             fail();
         } catch (ResourceException ex) {
             assertEquals(ex.getCode(), 403);
-            assertTrue(ex.getMessage().contains("Request must not have any hostname values"));
+            assertTrue(ex.getMessage().contains("Request must not have any sanDNS values"));
         }
     }
 
@@ -283,7 +285,7 @@ public class InstanceJenkinsProviderTest {
             fail();
         } catch (ResourceException ex) {
             assertEquals(ex.getCode(), 403);
-            assertTrue(ex.getMessage().contains("Unable to validate certificate request URI values"));
+            assertTrue(ex.getMessage().contains("Unable to validate certificate request sanURI values"));
         }
     }
 
@@ -303,7 +305,7 @@ public class InstanceJenkinsProviderTest {
             fail();
         } catch (ResourceException ex) {
             assertEquals(ex.getCode(), 403);
-            assertTrue(ex.getMessage().contains("Service credentials not provided"));
+            assertTrue(ex.getMessage().contains("Jenkins ID Token must be provided"));
         }
     }
 
@@ -369,7 +371,7 @@ public class InstanceJenkinsProviderTest {
 
         // our audience will not match
 
-        String idToken = generateIdToken("https://token.actions.githubusercontent.com",
+        String idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false, false, false, false);
         StringBuilder errMsg = new StringBuilder(256);
         boolean result = provider.validateOIDCToken(idToken, "sports", "api", "athenz:sia:0001", errMsg);
@@ -390,7 +392,7 @@ public class InstanceJenkinsProviderTest {
 
         // our issue time is not recent enough
 
-        String idToken = generateIdToken("https://token.actions.githubusercontent.com",
+        String idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000 - 400, false, false, false, false, false);
         StringBuilder errMsg = new StringBuilder(256);
         boolean result = provider.validateOIDCToken(idToken, "sports", "api", "athenz:sia:0001", errMsg);
@@ -399,7 +401,7 @@ public class InstanceJenkinsProviderTest {
 
         // create another token without the issue time
 
-        idToken = generateIdToken("https://token.actions.githubusercontent.com",
+        idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false, true, false, false);
         errMsg.setLength(0);
         result = provider.validateOIDCToken(idToken, "sports", "api", "athenz:sia:0001", errMsg);
@@ -420,7 +422,7 @@ public class InstanceJenkinsProviderTest {
 
         // create an id token without the subject claim
 
-        String idToken = generateIdToken("https://token.actions.githubusercontent.com",
+        String idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, true, false, false, false, false);
 
         StringBuilder errMsg = new StringBuilder(256);
@@ -449,7 +451,7 @@ public class InstanceJenkinsProviderTest {
 
         // create an id token
 
-        String idToken = generateIdToken("https://token.actions.githubusercontent.com",
+        String idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false, false, false, false);
 
         StringBuilder errMsg = new StringBuilder(256);
