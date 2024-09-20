@@ -39,12 +39,8 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     static final String JENKINS_PROP_ISSUER               = "athenz.zts.jenkins.issuer";
     static final String JENKINS_PROP_JWKS_URI             = "athenz.zts.jenkins.jwks_uri";
 
-    static final String JENKINS_ISSUER          = "https://token.actions.githubusercontent.com";
-    static final String JENKINS_ISSUER_JWKS_URI = "https://token.actions.githubusercontent.com/.well-known/jwks";
-
-    public static final String CLAIM_RUN_ID        = "run_id";
-    public static final String CLAIM_EVENT_NAME    = "event_name";
-    public static final String CLAIM_REPOSITORY    = "repository";
+    static final String JENKINS_ISSUER          = "https://jenkins.athenz.svc.cluster.local/oidc";
+    static final String JENKINS_ISSUER_JWKS_URI = "https://jenkins.athenz.svc.cluster.local/oidc/jwks";
 
     Set<String> dnsSuffixes = null;
     String jenkinsIssuer = null;
@@ -161,14 +157,14 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         if (!StringUtil.isEmpty(InstanceUtils.getInstanceProperty(instanceAttributes,
                 InstanceProvider.ZTS_INSTANCE_HOSTNAME))) {
-            throw forbiddenError("Request must not have any hostname values");
+            throw forbiddenError("Request must not have any sanDNS values");
         }
 
         // validate san URI
 
         if (!validateSanUri(InstanceUtils.getInstanceProperty(instanceAttributes,
                 InstanceProvider.ZTS_INSTANCE_SAN_URI))) {
-            throw forbiddenError("Unable to validate certificate request URI values");
+            throw forbiddenError("Unable to validate certificate request sanURI values");
         }
 
         // we need to validate the token which is our attestation
@@ -177,14 +173,14 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         final String attestationData = confirmation.getAttestationData();
         if (StringUtil.isEmpty(attestationData)) {
-            throw forbiddenError("Service credentials not provided");
+            throw forbiddenError("Jenkins ID Token must be provided");
         }
 
         StringBuilder errMsg = new StringBuilder(256);
         final String reqInstanceId = InstanceUtils.getInstanceProperty(instanceAttributes,
                 InstanceProvider.ZTS_INSTANCE_ID);
         if (!validateOIDCToken(attestationData, instanceDomain, instanceService, reqInstanceId, errMsg)) {
-            throw forbiddenError("Unable to validate Certificate Request: " + errMsg.toString());
+            throw forbiddenError("Unable to validate Certificate Request with the provided ID Token: " + errMsg.toString());
         }
 
         // validate the certificate san DNS names
