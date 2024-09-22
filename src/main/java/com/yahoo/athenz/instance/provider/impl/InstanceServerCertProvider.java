@@ -26,9 +26,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
+public class InstanceServerCertProvider implements InstanceProvider {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(InstanceWorkloadIPTokenProvider.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(InstanceServerCertProvider.class);
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
     private static final String URI_HOSTNAME_PREFIX = "athenz://hostname/";
 
@@ -37,7 +37,6 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
     static final String ZTS_PROP_EXPIRY_TIME          = "athenz.zts.provider_token_expiry_time";
 
     static final String ZTS_PROVIDER_SERVICE  = "sys.auth.zts";
-    static final String ZTS_INSTANCE_WORKLOAD_IP = "workload_ip";
 
     public static final String HDR_KEY_ID     = "kid";
     public static final String HDR_TOKEN_TYPE = "typ";
@@ -48,7 +47,6 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
     public static final String CLAIM_SERVICE     = "service";
     public static final String CLAIM_CLIENT_ID   = "client_id";
     public static final String CLAIM_INSTANCE_ID = "instance_id";
-    public static final String CLAIM_WORKLOAD_IP = "workload_ip";
 
     KeyStore keyStore = null;
     Set<String> dnsSuffixes = null;
@@ -146,7 +144,7 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
         // by this zts provider
 
         if (principals != null && !principals.contains(instanceDomain + "." + instanceService)) {
-            throw forbiddenError("Service not supported to be launched by ZTS Provider");
+            throw forbiddenError("Service not supported to be launched by Server Certificate Provider");
         }
 
         // we're supporting two attestation data models with our provider
@@ -182,8 +180,7 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
             final String instanceId = InstanceUtils.getInstanceProperty(instanceAttributes,
                     InstanceProvider.ZTS_INSTANCE_ID);
             tokenValidated = validateRegisterToken(attestationData, instanceDomain,
-                    instanceService, instanceId, InstanceUtils.getInstanceProperty(instanceAttributes,
-                            InstanceProvider.ZTS_INSTANCE_CLIENT_IP), registerInstance, errMsg);
+                    instanceService, instanceId, registerInstance, errMsg);
         }
 
         if (!tokenValidated) {
@@ -227,13 +224,53 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
         // validate the certificate san DNS names
 
         StringBuilder instanceId = new StringBuilder(256);
-        if (!InstanceUtils.validateCertRequestSanDnsNames(instanceAttributes, instanceDomain,
+        if (!validateCertRequestSanDnsNames(instanceAttributes, instanceDomain,
                 instanceService, dnsSuffixes, null, null, false, instanceId, null)) {
             throw forbiddenError("Unable to validate certificate request DNS");
         }
 
         confirmation.setAttributes(attributes);
         return confirmation;
+    }
+
+    @Override
+    public InstanceRegisterToken getInstanceRegisterToken(InstanceConfirmation details) {
+
+        // ZTS Server has already verified that the caller has update
+        // rights over the given service so we'll just generate
+        // an instance register token and return to the client
+
+        final String principal = InstanceUtils.getInstanceProperty(details.getAttributes(),
+                InstanceProvider.ZTS_REQUEST_PRINCIPAL);
+        final String instanceId = InstanceUtils.getInstanceProperty(details.getAttributes(),
+                InstanceProvider.ZTS_INSTANCE_ID);
+        final String tokenId = UUID.randomUUID().toString();
+
+        // first we'll generate and sign our token
+
+        final String registerToken = Jwts.builder()
+                .setId(tokenId)
+                .setSubject(ResourceUtils.serviceResourceName(details.getDomain(), details.getService()))
+                .setIssuedAt(Date.from(Instant.now()))
+                .setIssuer(provider)
+                .setAudience(provider)
+                .claim(CLAIM_PROVIDER, details.getProvider())
+                .claim(CLAIM_DOMAIN, details.getDomain())
+                .claim(CLAIM_SERVICE, details.getService())
+                .claim(CLAIM_INSTANCE_ID, instanceId)
+                .claim(CLAIM_CLIENT_ID, principal)
+                .setHeaderParam(HDR_KEY_ID, keyId)
+                .setHeaderParam(HDR_TOKEN_TYPE, HDR_TOKEN_JWT)
+                .signWith(key, keyAlg)
+                .compact();
+
+        // finally return our token to the caller
+
+        return new InstanceRegisterToken()
+                .setProvider(details.getProvider())
+                .setDomain(details.getDomain())
+                .setService(details.getService())
+                .setAttestationData(registerToken);
     }
 
     /**
@@ -364,51 +401,8 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
         return true;
     }
 
-    @Override
-	public InstanceRegisterToken getInstanceRegisterToken(InstanceConfirmation details) {
-	
-	    // ZTS Server has already verified that the caller has update
-	    // rights over the given service so we'll just generate
-	    // an instance register token and return to the client
-	
-	    final String principal = InstanceUtils.getInstanceProperty(details.getAttributes(),
-	            InstanceProvider.ZTS_REQUEST_PRINCIPAL);
-	    final String instanceId = InstanceUtils.getInstanceProperty(details.getAttributes(),
-	            InstanceProvider.ZTS_INSTANCE_ID);
-	    final String workloadIp = InstanceUtils.getInstanceProperty(details.getAttributes(),
-	            InstanceWorkloadIPTokenProvider.ZTS_INSTANCE_WORKLOAD_IP);
-	    final String tokenId = UUID.randomUUID().toString();
-	
-	    // first we'll generate and sign our token
-	
-	    final String registerToken = Jwts.builder()
-	            .setId(tokenId)
-	            .setSubject(ResourceUtils.serviceResourceName(details.getDomain(), details.getService()))
-	            .setIssuedAt(Date.from(Instant.now()))
-	            .setIssuer(provider)
-	            .setAudience(provider)
-	            .claim(CLAIM_PROVIDER, details.getProvider())
-	            .claim(CLAIM_DOMAIN, details.getDomain())
-	            .claim(CLAIM_SERVICE, details.getService())
-	            .claim(CLAIM_INSTANCE_ID, instanceId)
-	            .claim(CLAIM_CLIENT_ID, principal)
-	            .claim(CLAIM_WORKLOAD_IP, workloadIp)
-	            .setHeaderParam(HDR_KEY_ID, keyId)
-	            .setHeaderParam(HDR_TOKEN_TYPE, HDR_TOKEN_JWT)
-	            .signWith(key, keyAlg)
-	            .compact();
-	    
-	    // finally return our token to the caller
-	
-	    return new InstanceRegisterToken()
-	            .setProvider(details.getProvider())
-	            .setDomain(details.getDomain())
-	            .setService(details.getService())
-	            .setAttestationData(registerToken);
-	}
-
-	boolean validateRegisterToken(final String jwToken, final String domainName, final String serviceName,
-                                  final String instanceId, final String clientIp, boolean registerInstance, StringBuilder errMsg) {
+    boolean validateRegisterToken(final String jwToken, final String domainName, final String serviceName,
+                                  final String instanceId, boolean registerInstance, StringBuilder errMsg) {
 
         Jws<Claims> claims = Jwts.parserBuilder()
                 .setSigningKeyResolver(signingKeyResolver)
@@ -448,10 +442,6 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
         }
         if (!instanceId.equals(claimsBody.get(CLAIM_INSTANCE_ID, String.class))) {
             errMsg.append("invalid instance id in token: ").append(claimsBody.get(CLAIM_INSTANCE_ID, String.class));
-            return false;
-        }
-        if (!clientIp.equals(claimsBody.get(CLAIM_WORKLOAD_IP, String.class))) {
-            errMsg.append("invalid workload ip in token: ").append(claimsBody.get(CLAIM_WORKLOAD_IP, String.class));
             return false;
         }
         if (!ZTS_PROVIDER_SERVICE.equals(claimsBody.get(CLAIM_PROVIDER, String.class))) {
@@ -522,5 +512,188 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
         final String normCsrPublicKey = matcher.replaceAll("");
 
         return normAthenzPublicKey.equals(normCsrPublicKey);
+    }
+
+    /**
+     * validate the specifies sanDNS entries in the certificate request. If the failedDnsNames
+     * list is specified, it will be populated with the dns names that failed validation.
+     * However, if the failure is critical (e.g. we couldn't validate hostname, dns names suffix
+     * list is not specified), then the method will return false and the failedDnsNames list
+     * will be empty.
+     * @param attributes attributes from the certificate request
+     * @param domain name of the domain
+     * @param service name of the service
+     * @param dnsSuffixes list of dns suffixes
+     * @param k8sDnsSuffixes list of k8s dns suffixes
+     * @param k8sClusterNames list of k8s cluster names
+     * @param validateHostname flag to indicate whether we should validate hostname
+     * @param instanceId instance id value to be returned
+     * @param failedDnsNames list of failed dns names to be returned
+     * @return true if all dns names are valid, false otherwise
+     */
+    public static boolean validateCertRequestSanDnsNames(final Map<String, String> attributes, final String domain,
+            final String service, final Set<String> dnsSuffixes, final List<String> k8sDnsSuffixes,
+            final List<String> k8sClusterNames, boolean validateHostname, StringBuilder instanceId,
+            List<String> failedDnsNames) {
+
+        // make sure we have valid dns suffix specified
+
+        if (dnsSuffixes == null || dnsSuffixes.isEmpty()) {
+            LOGGER.error("No Cloud Provider DNS suffix specified for validation");
+            return false;
+        }
+
+        // first check to see if we're given any san dns names to validate
+        // if the list is empty then something is not right thus we'll
+        // reject the request
+
+        final String hostnames = InstanceUtils.getInstanceProperty(attributes, InstanceProvider.ZTS_INSTANCE_SAN_DNS);
+        if (StringUtil.isEmpty(hostnames)) {
+            LOGGER.error("Request contains no SAN DNS entries for validation");
+            return false;
+        }
+        String[] hosts = hostnames.split(",");
+
+        // extract the instance id from the request
+
+        if (!extractCertRequestInstanceId(attributes, hosts, dnsSuffixes, instanceId)) {
+            LOGGER.error("Request does not contain expected instance id entry");
+            return false;
+        }
+
+        // for hostnames that are included in the sanDNS entry in the certificate we have
+        // a couple of requirements:
+        // a) the sanDNS entry must end with <domain-with-dashes>.<dnsSuffix>
+        // b) one of the prefix components must be the <service> name
+
+        List<String> hostNameSuffixList = new ArrayList<>();
+//        final String dashDomain = domain.replace('.', '-');
+
+        String[] subDomainPortionList = domain.split("\\.");
+        Collections.reverse(Arrays.asList(subDomainPortionList));
+        StringJoiner reversedSubDomain = new StringJoiner(".");
+        for (String subDomainPortion : subDomainPortionList) {
+        	reversedSubDomain.add(subDomainPortion);
+        }
+        for (String dnsSuffix : dnsSuffixes) {
+            hostNameSuffixList.add("." + reversedSubDomain + "." + dnsSuffix);
+        }
+
+        // generate our cluster based names if we have clusters configured
+
+        Set<String> clusterNameSet = null;
+        if (k8sClusterNames != null && !k8sClusterNames.isEmpty()) {
+            clusterNameSet = new HashSet<>();
+            for (String clusterName : k8sClusterNames) {
+                for (String dnsSuffix : dnsSuffixes) {
+                    clusterNameSet.add(service + "." + reversedSubDomain + "." + clusterName + "." + dnsSuffix);
+                }
+            }
+        }
+
+        // if we have a hostname configured then verify it matches one of formats
+
+        if (validateHostname) {
+            final String hostname = InstanceUtils.getInstanceProperty(attributes, InstanceProvider.ZTS_INSTANCE_HOSTNAME);
+            if (!StringUtil.isEmpty(hostname) && !InstanceUtils.validateSanDnsName(hostname, service, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet)) {
+                LOGGER.error("InstanceUtils.validateSanDnsName() failed with " +
+                        "domain: {}, reversedSubDomain: {}, service: {}, hostname: {}, " +
+                        "hostNameSuffixList: {}, k8sDnsSuffixes: {}, clusterNameSet: {}",
+                        domain, reversedSubDomain, service, hostname, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet);
+                return false;
+            }
+        }
+
+        // validate the entries in our san dns list
+
+        boolean hostCheck = false;
+        for (String host : hosts) {
+
+            // ignore any entries used for instance id since we've processed
+            // those already when looking for the instance id
+
+            if (host.contains(InstanceUtils.ZTS_CERT_INSTANCE_ID)) {
+                continue;
+            }
+
+            if (!InstanceUtils.validateSanDnsName(host, service, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet)) {
+
+                // if we're not interested in the list of failed hostnames then
+                // we'll return failure right away. otherwise we'll keep track
+                // of the failed hostname and continue with the rest of the list
+
+                if (failedDnsNames == null) {
+                    LOGGER.error("InstanceUtils.validateSanDnsName() failed with " +
+                            "domain: {}, reversedSubDomain: {}, service: {}, host: {}, " +
+                            "hostNameSuffixList: {}, k8sDnsSuffixes: {}, clusterNameSet: {}",
+                            domain, reversedSubDomain, service, host, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet);
+                    return false;
+                } else {
+                    failedDnsNames.add(host);
+                    continue;
+                }
+            }
+
+            hostCheck = true;
+        }
+
+        // if we have no host entry that it's a failure. We're going to
+        // make sure the failedDnsNames list is empty and return false
+        // so the caller knows this is a critical failure as opposed to
+        // failure of not being able to validate the specified entries
+
+        if (!hostCheck) {
+            LOGGER.error("hostCheck failed with " +
+                    "domain: {}, reversedSubDomain: {}, service: {}, failedDnsNames: {}, " +
+                    "hostNameSuffixList: {}, k8sDnsSuffixes: {}, clusterNameSet: {}",
+                    domain, reversedSubDomain, service, failedDnsNames, hostNameSuffixList, k8sDnsSuffixes, clusterNameSet);
+            LOGGER.error("Request does not contain expected host SAN DNS entry");
+            if (failedDnsNames != null) {
+                failedDnsNames.clear();
+            }
+            return false;
+        }
+
+        // if we got here, then we're good to go as long as the
+        // failedDnsNames list is empty or null.
+        // if it's not empty then we have some failed entries
+        // and if it's null, then we would have already returned
+        // failure when processing the list
+
+        return failedDnsNames == null || failedDnsNames.isEmpty();
+    }
+
+    private static boolean extractCertRequestInstanceId(final Map<String, String> attributes, final String[] hosts,
+            final Set<String> dnsSuffixes, StringBuilder instanceId) {
+
+        for (String host : hosts) {
+
+            int idx = host.indexOf(InstanceUtils.ZTS_CERT_INSTANCE_ID);
+            if (idx != -1) {
+
+                // verify that we already don't have an instance id specified
+
+                if (instanceId.length() != 0) {
+                    LOGGER.error("Multiple instance id values specified: {}, {}", host, instanceId);
+                    return false;
+                }
+
+                if (!dnsSuffixes.contains(host.substring(idx + InstanceUtils.ZTS_CERT_INSTANCE_ID_LEN))) {
+                    LOGGER.error("Host: {} does not have expected instance id format", host);
+                    return false;
+                }
+
+                instanceId.append(host, 0, idx);
+            }
+        }
+
+        // if we found a value from our dns name values then we return right away
+        // otherwise, we need to look at the uri values to extract the instance id
+
+        if (instanceId.length() != 0) {
+            return true;
+        } else {
+            return InstanceUtils.extractCertRequestUriId(attributes, instanceId);
+        }
     }
 }
