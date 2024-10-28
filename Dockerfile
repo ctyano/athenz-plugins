@@ -1,8 +1,8 @@
-FROM docker.io/library/maven:3-eclipse-temurin-11-focal as builder
+FROM docker.io/library/maven:3-eclipse-temurin-17-focal as builder
 
 ARG VERSION=
 ARG ATHENZ_VERSION=
-ARG JAVA_VERSION=11
+ARG JAVA_VERSION=17
 # date -u +'%Y-%m-%dT%H:%M:%SZ'
 ARG BUILD_DATE
 # git rev-parse --short HEAD
@@ -15,7 +15,7 @@ LABEL org.opencontainers.image.title="Athenz Auth Core"
 LABEL org.opencontainers.image.authors="ctyano <ctyano@duck.com>"
 LABEL org.opencontainers.image.vendor="ctyano <ctyano@duck.com>"
 LABEL org.opencontainers.image.licenses="Private"
-LABEL org.opencontainers.image.url="ghcr.io/ctyano/athenz-auth-core"
+LABEL org.opencontainers.image.url="ghcr.io/ctyano/athenz-plugins"
 LABEL org.opencontainers.image.documentation="https://www.athenz.io/"
 LABEL org.opencontainers.image.source="https://github.com/AthenZ/athenz"
 
@@ -37,8 +37,8 @@ FROM docker.io/library/openjdk:22-slim-bullseye
 
 ARG VERSION
 
-COPY --from=builder /target/athenz-auth-core-$VERSION.jar /target/athenz-auth-core-$VERSION.jar
+COPY --from=builder /target/athenz-plugins-$VERSION.jar /target/athenz-plugins-$VERSION.jar
 
 ENV JAR_DESTINATION "/"
 
-ENTRYPOINT ["/bin/sh", "-c", "cp -p /target/athenz-auth-core-*.jar ${JAR_DESTINATION}/athenz-auth-core.jar"]
+ENTRYPOINT ["/bin/sh", "-c", "cp -p /target/athenz-plugins-*.jar ${JAR_DESTINATION}/athenz-plugins.jar"]

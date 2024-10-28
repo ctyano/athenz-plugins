@@ -1,0 +1,3 @@
+yq eval -o=json - -pxml <(curl -s https://raw.githubusercontent.com/AthenZ/athenz/refs/heads/master/pom.xml | yq -p xml .project.properties | sort) <(cat pom.xml.template | yq -p xml .project.properties | sort) | \
+yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' - | \
+yq eval -o=xml . -

@@ -1,25 +1,26 @@
 package com.yahoo.athenz.instance.provider.impl;
 
+import com.nimbusds.jose.proc.SecurityContext;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.yahoo.athenz.auth.Authorizer;
 import com.yahoo.athenz.auth.KeyStore;
 import com.yahoo.athenz.auth.Principal;
 import com.yahoo.athenz.auth.impl.SimplePrincipal;
+import com.yahoo.athenz.auth.token.jwts.JwtsHelper;
 import com.yahoo.athenz.auth.token.jwts.JwtsSigningKeyResolver;
-import com.yahoo.athenz.common.server.http.HttpDriver;
 import com.yahoo.athenz.common.server.util.config.dynamic.DynamicConfigLong;
 import com.yahoo.athenz.instance.provider.InstanceConfirmation;
 import com.yahoo.athenz.instance.provider.InstanceProvider;
-import com.yahoo.athenz.instance.provider.ResourceException;
-import com.yahoo.rdl.JSON;
-import com.yahoo.rdl.Struct;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.Jwts;
+import com.yahoo.athenz.instance.provider.ProviderResourceException;
 import org.eclipse.jetty.util.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLContext;
+
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -39,6 +40,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     static final String JENKINS_PROP_ISSUER               = "athenz.zts.jenkins.issuer";
     static final String JENKINS_PROP_JWKS_URI             = "athenz.zts.jenkins.jwks_uri";
 
+    static final String JENKINS_RUN_ID          = "sub";
     static final String JENKINS_ISSUER          = "https://jenkins.athenz.svc.cluster.local/oidc";
     static final String JENKINS_ISSUER_JWKS_URI = "https://jenkins.athenz.svc.cluster.local/oidc/jwks";
 
@@ -46,8 +48,8 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     String jenkinsIssuer = null;
     String provider = null;
     String audience = null;
-    JwtsSigningKeyResolver signingKeyResolver = null;
-    JwtsSigningKeyResolver keyStoreSigningKeyResolver = null;
+    String enterprise = null;
+    ConfigurableJWTProcessor<SecurityContext> jwtProcessor = null;
     Authorizer authorizer = null;
     DynamicConfigLong bootTimeOffsetSeconds;
     long certExpiryTime;
@@ -69,7 +71,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         audience = System.getProperty(JENKINS_PROP_AUDIENCE, "athenz.io");
 
-        // determine the dns suffix. if this is not specified we'll just default to github-actions.athenz.cloud
+        // determine the dns suffix. if this is not specified we'll just default to jenkins.athenz.cloud
 
         final String dnsSuffix = System.getProperty(JENKINS_PROP_PROVIDER_DNS_SUFFIX, "jenkins.athenz.io");
         dnsSuffixes = new HashSet<>();
@@ -85,18 +87,13 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         certExpiryTime = Long.parseLong(System.getProperty(JENKINS_PROP_CERT_EXPIRY_MINUTES, "360"));
 
-        // initialize our jwt key resolver
+        // initialize our jwt processor
 
         jenkinsIssuer = System.getProperty(JENKINS_PROP_ISSUER, JENKINS_ISSUER);
-        signingKeyResolver = new JwtsSigningKeyResolver(extractJenkinsIssuerJwksUri(jenkinsIssuer), null);
-        keyStoreSigningKeyResolver = new JwtsSigningKeyResolver(null, null);
+        jwtProcessor = JwtsHelper.getJWTProcessor(new JwtsSigningKeyResolver(extractjenkinsIssuerJwksUri(jenkinsIssuer), null));
     }
 
-    HttpDriver getHttpDriver(String url) {
-        return new HttpDriver.Builder(url, null).build();
-    }
-
-    String extractJenkinsIssuerJwksUri(final String issuer) {
+    String extractjenkinsIssuerJwksUri(final String issuer) {
 
         // if we have the value configured then that's what we're going to use
 
@@ -108,26 +105,18 @@ public class InstanceJenkinsProvider implements InstanceProvider {
         // otherwise we'll assume the issuer follows the standard and
         // includes the jwks uri in its openid configuration
 
-        try (HttpDriver httpDriver = getHttpDriver(issuer)) {
-            String openIdConfig = httpDriver.doGet("/.well-known/openid-configuration", null);
-            if (!StringUtil.isEmpty(openIdConfig)) {
-                Struct openIdConfigStruct = JSON.fromString(openIdConfig, Struct.class);
-                if (openIdConfigStruct != null) {
-                    jwksUri = openIdConfigStruct.getString("jwks_uri");
-                }
-            }
-        } catch (Exception ex) {
-            LOGGER.error("Unable to retrieve openid configuration from issuer: {}", issuer, ex);
-        }
+        final String openIdConfigUri = issuer + "/.well-known/openid-configuration";
+        JwtsHelper helper = new JwtsHelper();
+        jwksUri = helper.extractJwksUri(openIdConfigUri, null);
 
         // if we still don't have a value we'll just return the default value
 
         return StringUtil.isEmpty(jwksUri) ? JENKINS_ISSUER_JWKS_URI : jwksUri;
     }
 
-    private ResourceException forbiddenError(String message) {
+    private ProviderResourceException forbiddenError(String message) {
         LOGGER.error(message);
-        return new ResourceException(ResourceException.FORBIDDEN, message);
+        return new ProviderResourceException(ProviderResourceException.FORBIDDEN, message);
     }
 
     @Override
@@ -136,7 +125,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     }
 
     @Override
-    public InstanceConfirmation confirmInstance(InstanceConfirmation confirmation) {
+    public InstanceConfirmation confirmInstance(InstanceConfirmation confirmation) throws ProviderResourceException {
 
         // before running any checks make sure we have a valid authorizer
 
@@ -157,14 +146,14 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         if (!StringUtil.isEmpty(InstanceUtils.getInstanceProperty(instanceAttributes,
                 InstanceProvider.ZTS_INSTANCE_HOSTNAME))) {
-            throw forbiddenError("Request must not have any sanDNS values");
+            throw forbiddenError("Request must not have any hostname values");
         }
 
         // validate san URI
 
         if (!validateSanUri(InstanceUtils.getInstanceProperty(instanceAttributes,
                 InstanceProvider.ZTS_INSTANCE_SAN_URI))) {
-            throw forbiddenError("Unable to validate certificate request sanURI values");
+            throw forbiddenError("Unable to validate certificate request URI values");
         }
 
         // we need to validate the token which is our attestation
@@ -173,14 +162,14 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         final String attestationData = confirmation.getAttestationData();
         if (StringUtil.isEmpty(attestationData)) {
-            throw forbiddenError("Jenkins ID Token must be provided");
+            throw forbiddenError("Service credentials not provided");
         }
 
         StringBuilder errMsg = new StringBuilder(256);
         final String reqInstanceId = InstanceUtils.getInstanceProperty(instanceAttributes,
                 InstanceProvider.ZTS_INSTANCE_ID);
         if (!validateOIDCToken(attestationData, instanceDomain, instanceService, reqInstanceId, errMsg)) {
-            throw forbiddenError("Unable to validate Certificate Request with the provided ID Token: " + errMsg.toString());
+            throw forbiddenError("Unable to validate Certificate Request: " + errMsg);
         }
 
         // validate the certificate san DNS names
@@ -192,7 +181,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
         }
 
         // set our cert attributes in the return object.
-        // for GitHub Actions we do not allow refresh of those certificates, and
+        // for Jenkins we do not allow refresh of those certificates, and
         // the issued certificate can only be used by clients and not servers
 
         Map<String, String> attributes = new HashMap<>();
@@ -205,7 +194,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     }
 
     @Override
-    public InstanceConfirmation refreshInstance(InstanceConfirmation confirmation) {
+    public InstanceConfirmation refreshInstance(InstanceConfirmation confirmation) throws ProviderResourceException {
 
         // we do not allow refresh of GitHub actions certificates
 
@@ -238,70 +227,89 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     boolean validateOIDCToken(final String jwToken, final String domainName, final String serviceName,
             final String instanceId, StringBuilder errMsg) {
 
-        Jws<Claims> claims;
-        try {
-             claims = Jwts.parserBuilder()
-                    .setSigningKeyResolver(signingKeyResolver)
-                    .setAllowedClockSkewSeconds(60)
-                    .build()
-                    .parseClaimsJws(jwToken);
-        } catch (Exception e) {
-            errMsg.append("Unable to parse and validate token with JWKs: ").append(e.getMessage());
-            try {
-                 claims = Jwts.parserBuilder()
-                        .setSigningKeyResolver(keyStoreSigningKeyResolver)
-                        .setAllowedClockSkewSeconds(60)
-                        .build()
-                        .parseClaimsJws(jwToken);
-            } catch (Exception ex) {
-                errMsg.append("Unable to parse and validate token with Key Store: ").append(ex.getMessage());
-            	return false;
-            }
+        if (jwtProcessor == null) {
+            errMsg.append("JWT Processor not initialized");
+            return false;
         }
 
-        // verify the issuer in set to GitHub Actions
+        JWTClaimsSet claimsSet;
+        try {
+            claimsSet = jwtProcessor.process(jwToken, null);
+        } catch (Exception ex) {
+            errMsg.append("Unable to parse and validate token: ").append(ex.getMessage());
+            return false;
+        }
 
-        Claims claimsBody = claims.getBody();
-        if (!jenkinsIssuer.equals(claimsBody.getIssuer())) {
-            errMsg.append("token issuer is not Jenkins: ").append(claimsBody.getIssuer());
+        // verify the issuer in set to Jenkins
+
+        if (!jenkinsIssuer.equals(claimsSet.getIssuer())) {
+            errMsg.append("token issuer is not Jenkins: ").append(claimsSet.getIssuer());
             return false;
         }
 
         // verify that token audience is set for our service
 
-        if (!audience.equals(claimsBody.getAudience())) {
-            errMsg.append("token audience is not ZTS Server audience: ").append(claimsBody.getAudience());
+        if (!audience.equals(JwtsHelper.getAudience(claimsSet))) {
+            errMsg.append("token audience is not ZTS Server audience: ").append(JwtsHelper.getAudience(claimsSet));
             return false;
         }
 
         // need to verify that the issue time is within our configured bootstrap time
 
-        Date issueDate = claimsBody.getIssuedAt();
+        Date issueDate = claimsSet.getIssueTime();
         if (issueDate == null || issueDate.getTime() < System.currentTimeMillis() -
                 TimeUnit.SECONDS.toMillis(bootTimeOffsetSeconds.get())) {
             errMsg.append("job start time is not recent enough, issued at: ").append(issueDate);
             return false;
         }
 
+        // verify that the instance id matches the repository and run id in the token
+
+        if (!validateInstanceId(instanceId, claimsSet, errMsg)) {
+            return false;
+        }
+
         // verify the domain and service names in the token based on our configuration
 
-        return validateTenantDomainToken(claimsBody, domainName, serviceName, errMsg);
+        return validateTenantDomainToken(claimsSet, domainName, serviceName, errMsg);
     }
 
-    boolean validateTenantDomainToken(final Claims claims, final String domainName, final String serviceName,
+    boolean validateInstanceId(final String instanceId, JWTClaimsSet claimsSet, StringBuilder errMsg) {
+
+        // the format for the instance id is <org>:<repo>:<run_id>
+        // the repository claim in the token has the format <org>/<repo>
+        // so we'll extract that value and replace / with : to match our instance id
+
+        final String runId = JwtsHelper.getStringClaim(claimsSet, JENKINS_RUN_ID);
+        if (StringUtil.isEmpty(runId)) {
+            errMsg.append("token does not contain required subject claim");
+            return false;
+        }
+        URI netUrl;
+		try {
+            netUrl = new URI(runId);
+        } catch (URISyntaxException e) {
+            errMsg.append("token does not contain valid subject claim");
+            return false;
+        }
+        final String tokenInstanceId = netUrl.getHost() + netUrl.getPath().replace("/", ":");
+        if (!tokenInstanceId.equals(instanceId)) {
+            errMsg.append("invalid instance id: ").append(tokenInstanceId).append("/").append(instanceId);
+            return false;
+        }
+        return true;
+    }
+
+    boolean validateTenantDomainToken(final JWTClaimsSet claimsSet, final String domainName, final String serviceName,
             StringBuilder errMsg) {
 
         // we need to extract and generate our action value for the authz check
 
-        final String action = "jenkins.job";
+        final String action = "jenkins-pipeline";
 
         // we need to generate our resource value based on the subject
 
-        final String subject = claims.getSubject();
-        if (StringUtil.isEmpty(subject)) {
-            errMsg.append("token does not contain required subject claim");
-            return false;
-        }
+        final String subject = claimsSet.getSubject();
 
         // generate our principal object and carry out authorization check
 

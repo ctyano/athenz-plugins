@@ -2,10 +2,10 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <name>athenz-auth-core</name>
+  <name>athenz-plugins</name>
   <description>Core Auth Interfaces</description>
   <groupId>io.athenz</groupId>
-  <artifactId>athenz-auth-core</artifactId>
+  <artifactId>athenz-plugins</artifactId>
   <version>0.0.0</version>
   <packaging>jar</packaging>
   <url>https://www.athenz.io</url>
@@ -173,9 +173,9 @@
 
   <profiles>
     <profile>
-      <id>jdk11</id>
+      <id>jdk17</id>
       <activation>
-        <jdk>[11,)</jdk>
+        <jdk>[17,)</jdk>
       </activation>
       <build>
         <plugins>
@@ -185,16 +185,16 @@
             <version>${maven-compiler-plugin.version}</version>
             <executions>
               <execution>
-                <id>jdk11</id>
+                <id>jdk17</id>
                 <goals>
                   <goal>compile</goal>
                 </goals>
                 <configuration>
-                  <release>11</release>
+                  <release>17</release>
                   <compileSourceRoots>
-                    <compileSourceRoot>${project.basedir}/src/main/java11</compileSourceRoot>
+                    <compileSourceRoot>${project.basedir}/src/main/java17</compileSourceRoot>
                   </compileSourceRoots>
-                  <outputDirectory>${project.build.outputDirectory}/META-INF/versions/11</outputDirectory>
+                  <outputDirectory>${project.build.outputDirectory}/META-INF/versions/17</outputDirectory>
                 </configuration>
               </execution>
             </executions>
