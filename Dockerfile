@@ -1,4 +1,4 @@
-FROM docker.io/library/maven:3-eclipse-temurin-11-focal as builder
+FROM docker.io/library/maven:3-eclipse-temurin-17-focal as builder
 
 ARG VERSION=
 ARG ATHENZ_VERSION=
