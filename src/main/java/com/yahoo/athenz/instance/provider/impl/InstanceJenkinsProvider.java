@@ -35,7 +35,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
     static final String JENKINS_PROP_PROVIDER_DNS_SUFFIX  = "athenz.zts.jenkins.provider_dns_suffix";
     static final String JENKINS_PROP_BOOT_TIME_OFFSET     = "athenz.zts.jenkins.boot_time_offset";
-    static final String JENKINS_PROP_CERT_EXPIRY_TIME     = "athenz.zts.jenkins.cert_expiry_minutes";
+    static final String JENKINS_PROP_CERT_EXPIRY_MINUTES  = "athenz.zts.jenkins.cert_expiry_minutes";
     static final String JENKINS_PROP_AUDIENCE             = "athenz.zts.jenkins.audience";
     static final String JENKINS_PROP_ISSUER               = "athenz.zts.jenkins.issuer";
     static final String JENKINS_PROP_JWKS_URI             = "athenz.zts.jenkins.jwks_uri";
@@ -85,7 +85,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         // get default/max expiry time for any generated tokens - 6 hours
 
-        certExpiryTime = Long.parseLong(System.getProperty(JENKINS_PROP_CERT_EXPIRY_TIME, "360"));
+        certExpiryTime = Long.parseLong(System.getProperty(JENKINS_PROP_CERT_EXPIRY_MINUTES, "360"));
 
         // initialize our jwt processor
 
