@@ -6,10 +6,8 @@ import com.yahoo.athenz.auth.util.Crypto;
 import com.yahoo.athenz.common.server.dns.HostnameResolver;
 import com.yahoo.athenz.instance.provider.InstanceConfirmation;
 import com.yahoo.athenz.instance.provider.InstanceProvider;
-import com.yahoo.athenz.instance.provider.ResourceException;
+import com.yahoo.athenz.instance.provider.ProviderResourceException;
 import com.yahoo.athenz.zts.InstanceRegisterToken;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import org.mockito.Mockito;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -19,12 +17,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
-import static com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider.*;
 import static org.testng.Assert.*;
 import static org.testng.Assert.assertEquals;
 
@@ -37,6 +31,7 @@ public class InstanceWorkloadIPTokenProviderTest {
     public void setup() throws IOException {
         Path path = Paths.get("./src/test/resources/public_k0.key");
         servicePublicKeyStringK0 = new String(Files.readAllBytes(path));
+
         path = Paths.get("./src/test/resources/unit_test_private_k0.key");
         servicePrivateKeyStringK0 = new String(Files.readAllBytes(path));
     }
@@ -44,7 +39,7 @@ public class InstanceWorkloadIPTokenProviderTest {
     @Test
     public void testInitializeDefaults() {
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, null);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, null);
         assertTrue(provider.dnsSuffixes.contains("zts.athenz.cloud"));
         assertEquals(InstanceProvider.Scheme.CLASS, provider.getProviderScheme());
         assertNull(provider.keyStore);
@@ -59,7 +54,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "athenz.api,sports.backend");
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, null);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, null);
         assertTrue(provider.dnsSuffixes.contains("zts.cloud"));
         assertNull(provider.keyStore);
         assertEquals(provider.principals.size(), 2);
@@ -71,7 +66,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "");
 
         provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, null);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, null);
         assertTrue(provider.dnsSuffixes.contains("zts.athenz.cloud"));
         assertNull(provider.keyStore);
         assertNull(provider.principals);
@@ -80,7 +75,7 @@ public class InstanceWorkloadIPTokenProviderTest {
     }
 
     @Test
-    public void testRefreshInstance() {
+    public void testRefreshInstance() throws ProviderResourceException {
 
         KeyStore keystore = Mockito.mock(KeyStore.class);
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
@@ -88,7 +83,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api");
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
                 .keyId("v0").salt("salt").issueTime(System.currentTimeMillis() / 1000)
@@ -115,7 +110,7 @@ public class InstanceWorkloadIPTokenProviderTest {
     public void testValidateSanIp() {
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, null);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, null);
         assertTrue(provider.validateSanIp(new String[]{"10.1.1.1"}, "10.1.1.1"));
         assertTrue(provider.validateSanIp(null, "10.1.1.1"));
         assertTrue(provider.validateSanIp(new String[]{}, "10.1.1.1"));
@@ -150,7 +145,7 @@ public class InstanceWorkloadIPTokenProviderTest {
                .thenReturn(new HashSet<>(Arrays.asList("10.1.1.1", "2001:db8:a0b:12f0:0:0:0:1")));
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, null);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, null);
         provider.setHostnameResolver(hostnameResolver);
 
         assertTrue(provider.validateHostname("abc.athenz.com", new String[]{"10.1.1.1"}));
@@ -178,7 +173,7 @@ public class InstanceWorkloadIPTokenProviderTest {
     @Test
     public void testValidateSanUri() {
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, null);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, null);
         assertTrue(provider.validateSanUri("athenz://hostname/abc.athenz.com", "abc.athenz.com"));
         assertTrue(provider.validateSanUri("spiffe://movies/sa/writer,athenz://hostname/abc.athenz.com", "abc.athenz.com"));
         assertTrue(provider.validateSanUri("spiffe://movies/sa/writer,athenz://hostname/abc.athenz.com,athenz://instanceid/zts/abc.athenz.com", "abc.athenz.com"));
@@ -197,38 +192,11 @@ public class InstanceWorkloadIPTokenProviderTest {
     public void testAuthenticate() {
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, null);
-        StringBuilder errMsg = new StringBuilder(256);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, null);
 
         KeyStore keystore = Mockito.mock(KeyStore.class);
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
 
-        String token = "invalidtoken";
-        assertNull(provider.authenticate(token, null, servicePublicKeyStringK0, errMsg));
-        assertTrue(errMsg.toString().contains("Invalid token"));
-
-        errMsg.setLength(0);
-        token = "v=S1;d=domain;n=service;t=1234;e=1235;k=0;h=host1;i=1.2.3.4;b=svc1,svc2;s=signature;bk=0;bn=svc1;bs=signature";
-        assertNull(provider.authenticate(token, null, servicePublicKeyStringK0, errMsg));
-        assertTrue(errMsg.toString().contains("authorized service token"));
-
-        PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
-                .keyId("v0").salt("salt").issueTime(System.currentTimeMillis() / 1000)
-                .expirationWindow(3600).build();
-        tokenToSign.sign(servicePrivateKeyStringK0);
-
-        errMsg.setLength(0);
-        assertNotNull(provider.authenticate(tokenToSign.getSignedToken(), keystore, servicePublicKeyStringK0, errMsg));
-
-        // test with mismatch public key
-
-        assertNull(provider.authenticate(tokenToSign.getSignedToken(), keystore, "publicKey", errMsg));
-
-        // create invalid signature
-
-        errMsg.setLength(0);
-        assertNull(provider.authenticate(tokenToSign.getSignedToken().replace(";s=", ";s=abc"),
-                keystore, servicePublicKeyStringK0, errMsg));
         provider.close();
     }
 
@@ -239,39 +207,16 @@ public class InstanceWorkloadIPTokenProviderTest {
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
         StringBuilder errMsg = new StringBuilder(256);
 
-        String token = "invalidtoken";
-        assertFalse(provider.validateServiceToken(token, "sports", "api", servicePublicKeyStringK0, errMsg));
-        assertTrue(errMsg.toString().contains("Invalid token"));
-
         errMsg.setLength(0);
-
-        PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
-                .keyId("v0").salt("salt").issueTime(System.currentTimeMillis() / 1000)
-                .expirationWindow(3600).build();
-        tokenToSign.sign(servicePrivateKeyStringK0);
-
-        errMsg.setLength(0);
-        assertTrue(provider.validateServiceToken(tokenToSign.getSignedToken(), "sports", "api",
-                servicePublicKeyStringK0, errMsg));
-
-        errMsg.setLength(0);
-        assertFalse(provider.validateServiceToken(tokenToSign.getSignedToken(), "sports", "ui",
-                servicePublicKeyStringK0, errMsg));
-        assertTrue(errMsg.toString().contains("service mismatch"));
-
-        errMsg.setLength(0);
-        assertFalse(provider.validateServiceToken(tokenToSign.getSignedToken(), "weather", "api",
-                servicePublicKeyStringK0, errMsg));
-        assertTrue(errMsg.toString().contains("domain mismatch"));
 
         provider.close();
     }
 
     @Test
-    public void testConfirmInstance() {
+    public void testConfirmInstance() throws ProviderResourceException {
 
         KeyStore keystore = Mockito.mock(KeyStore.class);
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
@@ -279,7 +224,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api");
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
                 .keyId("v0").salt("salt").issueTime(System.currentTimeMillis() / 1000)
@@ -311,7 +256,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api");
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "backend")
                 .keyId("v0").salt("salt").issueTime(System.currentTimeMillis() / 1000)
@@ -332,7 +277,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         try {
             provider.confirmInstance(confirmation);
             fail();
-        } catch (ResourceException ex) {
+        } catch (ProviderResourceException ex) {
             assertTrue(ex.getMessage().contains("Service not supported to be launched by ZTS Provider"));
         }
         provider.close();
@@ -340,7 +285,7 @@ public class InstanceWorkloadIPTokenProviderTest {
     }
 
     @Test
-    public void testConfirmInstanceValidHostname() {
+    public void testConfirmInstanceValidHostname() throws ProviderResourceException {
 
         KeyStore keystore = Mockito.mock(KeyStore.class);
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
@@ -352,7 +297,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         );
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
         provider.setHostnameResolver(hostnameResolver);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
@@ -380,7 +325,7 @@ public class InstanceWorkloadIPTokenProviderTest {
     }
 
     @Test
-    public void testConfirmInstanceValidHostnameIpv6() {
+    public void testConfirmInstanceValidHostnameIpv6() throws ProviderResourceException {
 
         KeyStore keystore = Mockito.mock(KeyStore.class);
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
@@ -392,7 +337,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         );
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
         provider.setHostnameResolver(hostnameResolver);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
@@ -430,7 +375,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         Mockito.when(hostnameResolver.getAllByName("hostabc.athenz.com")).thenReturn(new HashSet<>(Collections.singletonList("10.1.1.2")));
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
         provider.setHostnameResolver(hostnameResolver);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
@@ -455,7 +400,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         try {
             provider.confirmInstance(confirmation);
             fail();
-        } catch (ResourceException ex) {
+        } catch (ProviderResourceException ex) {
             assertEquals(ex.getCode(), 403);
             assertTrue(ex.getMessage().contains("validate certificate request hostname"));
         }
@@ -473,7 +418,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         Mockito.when(hostnameResolver.getAllByName("hostabc.athenz.com")).thenReturn(new HashSet<>(Collections.singletonList("10.1.1.1")));
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
         provider.setHostnameResolver(hostnameResolver);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
@@ -499,7 +444,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         try {
             provider.confirmInstance(confirmation);
             fail();
-        } catch (ResourceException ex) {
+        } catch (ProviderResourceException ex) {
             assertEquals(ex.getCode(), 403);
             assertTrue(ex.getMessage().contains("validate certificate request URI hostname"));
         }
@@ -513,7 +458,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
                 .keyId("v0").salt("salt").issueTime(System.currentTimeMillis() / 1000)
@@ -536,7 +481,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         try {
             provider.confirmInstance(confirmation);
             fail();
-        } catch (ResourceException ex) {
+        } catch (ProviderResourceException ex) {
             assertEquals(ex.getCode(), 403);
             assertTrue(ex.getMessage().contains("validate request IP address"));
         }
@@ -550,7 +495,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
 
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
+        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
 
         PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
                 .keyId("v0").salt("salt").issueTime(System.currentTimeMillis() / 1000)
@@ -573,7 +518,7 @@ public class InstanceWorkloadIPTokenProviderTest {
         try {
             provider.confirmInstance(confirmation);
             fail();
-        } catch (ResourceException ex) {
+        } catch (ProviderResourceException ex) {
             assertEquals(ex.getCode(), 403);
             assertTrue(ex.getMessage().contains("validate certificate request DNS"));
         }
@@ -581,62 +526,7 @@ public class InstanceWorkloadIPTokenProviderTest {
     }
 
     @Test
-    public void testConfirmInstanceInvalidToken() {
-
-        KeyStore keystore = Mockito.mock(KeyStore.class);
-        Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
-
-        InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
-
-        PrincipalToken tokenToSign = new PrincipalToken.Builder("S1", "sports", "api")
-                .keyId("v0").salt("salt").issueTime(System.currentTimeMillis() / 1000)
-                .expirationWindow(3600).build();
-        tokenToSign.sign(servicePrivateKeyStringK0);
-
-        InstanceConfirmation confirmation = new InstanceConfirmation();
-        confirmation.setAttestationData(tokenToSign.getSignedToken().replace(";s=", ";s=abc"));
-        confirmation.setDomain("sports");
-        confirmation.setService("api");
-        confirmation.setProvider("sys.auth.zts");
-
-        try {
-            provider.confirmInstance(confirmation);
-            fail();
-        } catch (ResourceException ex) {
-            assertEquals(ex.getCode(), 403);
-            assertTrue(ex.getMessage().contains("validate Certificate Request Auth Token"));
-        }
-        provider.close();
-    }
-
-    @Test
-    public void testGetInstanceRegisterToken() throws IOException {
-
-        InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("provider", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, null);
-
-        Path path = Paths.get("./src/test/resources/unit_test_ec_private.key");
-        final String keyPem = new String(Files.readAllBytes(path));
-
-        PrivateKey privateKey = Crypto.loadPrivateKey(keyPem);
-        provider.setPrivateKey(privateKey, "k0", SignatureAlgorithm.ES256);
-
-        InstanceConfirmation confirmation = new InstanceConfirmation();
-        confirmation.setDomain("sports");
-        confirmation.setService("api");
-        confirmation.setProvider("sys.auth.zts");
-        Map<String, String> attrs = new HashMap<>();
-        attrs.put(InstanceProvider.ZTS_INSTANCE_ID, "id001");
-        confirmation.setAttributes(attrs);
-
-        InstanceRegisterToken token = provider.getInstanceRegisterToken(confirmation);
-        assertNotNull(token.getAttestationData());
-        provider.close();
-    }
-
-    @Test
-    public void testConfirmInstanceWithRegisterToken() throws IOException {
+    public void testConfirmInstanceEmptyCredentials() {
 
         KeyStore keystore = Mockito.mock(KeyStore.class);
         Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
@@ -645,249 +535,8 @@ public class InstanceWorkloadIPTokenProviderTest {
 
         // get our ec public key
 
-        Path path = Paths.get("./src/test/resources/unit_test_ec_public.key");
-        String keyPem = new String(Files.readAllBytes(path));
-        PublicKey publicKey = Crypto.loadPublicKey(keyPem);
-
         InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("sys.auth.zts", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
-        provider.signingKeyResolver.addPublicKey("k0", publicKey);
-
-        // get our private key now
-
-        path = Paths.get("./src/test/resources/unit_test_ec_private.key");
-        keyPem = new String(Files.readAllBytes(path));
-
-        PrivateKey privateKey = Crypto.loadPrivateKey(keyPem);
-        provider.setPrivateKey(privateKey, "k0", SignatureAlgorithm.ES256);
-
-        InstanceConfirmation tokenConfirmation = new InstanceConfirmation();
-        tokenConfirmation.setDomain("sports");
-        tokenConfirmation.setService("api");
-        tokenConfirmation.setProvider("sys.auth.zts");
-        Map<String, String> attrs = new HashMap<>();
-        attrs.put(InstanceProvider.ZTS_INSTANCE_ID, "id001");
-        attrs.put(InstanceWorkloadIPTokenProvider.ZTS_INSTANCE_WORKLOAD_IP, "127.0.0.1");
-        tokenConfirmation.setAttributes(attrs);
-
-        InstanceRegisterToken token = provider.getInstanceRegisterToken(tokenConfirmation);
-
-        // generate instance confirmation
-
-        InstanceConfirmation confirmation = new InstanceConfirmation();
-        confirmation.setAttestationData(token.getAttestationData());
-        confirmation.setDomain("sports");
-        confirmation.setService("api");
-        confirmation.setProvider("sys.auth.zts");
-
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(InstanceProvider.ZTS_INSTANCE_SAN_DNS, "api.sports.zts.athenz.cloud,id001.instanceid.athenz.zts.athenz.cloud");
-        attributes.put(InstanceProvider.ZTS_INSTANCE_CSR_PUBLIC_KEY, servicePublicKeyStringK0);
-        attributes.put(InstanceProvider.ZTS_INSTANCE_ID, "id001");
-        attributes.put(InstanceWorkloadIPTokenProvider.ZTS_INSTANCE_CLIENT_IP, "127.0.0.1");
-        confirmation.setAttributes(attributes);
-
-        assertNotNull(provider.confirmInstance(confirmation));
-        provider.close();
-        System.clearProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST);
-    }
-
-    @Test
-    public void testValidateRegisterTokenMismatchFields() throws IOException {
-
-        KeyStore keystore = Mockito.mock(KeyStore.class);
-        Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
-
-        System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api");
-
-        // get our ec public key
-
-        Path path = Paths.get("./src/test/resources/unit_test_ec_public.key");
-        String keyPem = new String(Files.readAllBytes(path));
-        PublicKey publicKey = Crypto.loadPublicKey(keyPem);
-
-        InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("sys.auth.zts", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
-        provider.signingKeyResolver.addPublicKey("k0", publicKey);
-
-        // get our private key now
-
-        path = Paths.get("./src/test/resources/unit_test_ec_private.key");
-        keyPem = new String(Files.readAllBytes(path));
-
-        PrivateKey privateKey = Crypto.loadPrivateKey(keyPem);
-        provider.setPrivateKey(privateKey, "k0", SignatureAlgorithm.ES256);
-
-        InstanceConfirmation tokenConfirmation = new InstanceConfirmation();
-        tokenConfirmation.setDomain("sports");
-        tokenConfirmation.setService("api");
-        tokenConfirmation.setProvider("sys.auth.zts");
-        Map<String, String> attrs = new HashMap<>();
-        attrs.put(InstanceProvider.ZTS_INSTANCE_ID, "id001");
-        tokenConfirmation.setAttributes(attrs);
-
-        InstanceRegisterToken token = provider.getInstanceRegisterToken(tokenConfirmation);
-
-        // now let's use the validate method for specific cases
-
-        StringBuilder errMsg = new StringBuilder();
-        assertFalse(provider.validateRegisterToken(token.getAttestationData(),
-                "weather", "api", "id001", "127.0.0.1", false, errMsg));
-        assertTrue(errMsg.toString().contains("invalid domain name"));
-
-        // next service mismatch
-
-        errMsg.setLength(0);
-        assertFalse(provider.validateRegisterToken(token.getAttestationData(),
-                "sports", "backend", "id001", "127.0.0.1", false, errMsg));
-        assertTrue(errMsg.toString().contains("invalid service name"));
-
-        // invalid instance id
-
-        errMsg.setLength(0);
-        assertFalse(provider.validateRegisterToken(token.getAttestationData(),
-                "sports", "api", "id002", "127.0.0.1", false, errMsg));
-        assertTrue(errMsg.toString().contains("invalid instance id"));
-
-        provider.close();
-        System.clearProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST);
-    }
-
-    @Test
-    public void testConfirmInstanceWithRegisterTokenMismatchProvider() throws IOException {
-
-        KeyStore keystore = Mockito.mock(KeyStore.class);
-        Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
-
-        System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api,weather.api,sports.backend");
-
-        // get our ec public key
-
-        Path path = Paths.get("./src/test/resources/unit_test_ec_public.key");
-        String keyPem = new String(Files.readAllBytes(path));
-        PublicKey publicKey = Crypto.loadPublicKey(keyPem);
-
-        InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("athenz.zts", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
-        provider.signingKeyResolver.addPublicKey("k0", publicKey);
-
-        // get our private key now
-
-        path = Paths.get("./src/test/resources/unit_test_ec_private.key");
-        keyPem = new String(Files.readAllBytes(path));
-
-        PrivateKey privateKey = Crypto.loadPrivateKey(keyPem);
-        provider.setPrivateKey(privateKey, "k0", SignatureAlgorithm.ES256);
-
-        InstanceConfirmation tokenConfirmation = new InstanceConfirmation();
-        tokenConfirmation.setDomain("sports");
-        tokenConfirmation.setService("api");
-        tokenConfirmation.setProvider("sys.auth.zts");
-        Map<String, String> attrs = new HashMap<>();
-        attrs.put(InstanceProvider.ZTS_INSTANCE_ID, "id001");
-        tokenConfirmation.setAttributes(attrs);
-
-        InstanceRegisterToken token = provider.getInstanceRegisterToken(tokenConfirmation);
-
-        // generate instance confirmation
-
-        InstanceConfirmation confirmation = new InstanceConfirmation();
-        confirmation.setAttestationData(token.getAttestationData());
-        confirmation.setDomain("sports");
-        confirmation.setService("api");
-        confirmation.setProvider("sys.auth.zts");
-
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(InstanceProvider.ZTS_INSTANCE_SAN_DNS, "api.sports.zts.athenz.cloud,id001.instanceid.athenz.zts.athenz.cloud");
-        attributes.put(InstanceProvider.ZTS_INSTANCE_CSR_PUBLIC_KEY, servicePublicKeyStringK0);
-        attributes.put(InstanceProvider.ZTS_INSTANCE_ID, "id001");
-        confirmation.setAttributes(attributes);
-
-        // provider mismatch
-
-        try {
-            provider.confirmInstance(confirmation);
-            fail();
-        } catch (ResourceException ex) {
-            assertEquals(ex.getCode(), ResourceException.FORBIDDEN);
-        }
-
-        // calling validation directly should fail as well
-
-        StringBuilder errMsg = new StringBuilder();
-        assertFalse(provider.validateRegisterToken(token.getAttestationData(),
-                "sports", "api", "id001", "127.0.0.1", false, errMsg));
-        assertTrue(errMsg.toString().contains("token audience is not ZTS provider"));
-
-        provider.close();
-        System.clearProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST);
-    }
-
-    @Test
-    public void testValidateRegisterTokenMismatchProvider() throws IOException {
-
-        KeyStore keystore = Mockito.mock(KeyStore.class);
-        Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
-
-        System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api,weather.api,sports.backend");
-
-        // get our ec public key
-
-        Path path = Paths.get("./src/test/resources/unit_test_ec_public.key");
-        String keyPem = new String(Files.readAllBytes(path));
-        PublicKey publicKey = Crypto.loadPublicKey(keyPem);
-
-        InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("sys.auth.zts", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
-        provider.signingKeyResolver.addPublicKey("k0", publicKey);
-
-        // get our private key now
-
-        path = Paths.get("./src/test/resources/unit_test_ec_private.key");
-        keyPem = new String(Files.readAllBytes(path));
-
-        PrivateKey privateKey = Crypto.loadPrivateKey(keyPem);
-        provider.setPrivateKey(privateKey, "k0", SignatureAlgorithm.ES256);
-
-        InstanceConfirmation tokenConfirmation = new InstanceConfirmation();
-        tokenConfirmation.setDomain("sports");
-        tokenConfirmation.setService("api");
-        tokenConfirmation.setProvider("athenz.zts");
-        Map<String, String> attrs = new HashMap<>();
-        attrs.put(InstanceProvider.ZTS_INSTANCE_ID, "id001");
-        attrs.put(InstanceWorkloadIPTokenProvider.ZTS_INSTANCE_WORKLOAD_IP, "127.0.0.1");
-        tokenConfirmation.setAttributes(attrs);
-
-        InstanceRegisterToken token = provider.getInstanceRegisterToken(tokenConfirmation);
-
-        // calling validation directly should fail with invalid provider
-
-        StringBuilder errMsg = new StringBuilder();
-        assertFalse(provider.validateRegisterToken(token.getAttestationData(),
-                "sports", "api", "id001", "127.0.0.1", false, errMsg));
-        assertTrue(errMsg.toString().contains("invalid provider name"));
-
-        provider.close();
-        System.clearProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST);
-    }
-
-    @Test
-    public void testConfirmInstanceEmptyCredentials() throws IOException {
-
-        KeyStore keystore = Mockito.mock(KeyStore.class);
-        Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
-
-        System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api");
-
-        // get our ec public key
-
-        Path path = Paths.get("./src/test/resources/unit_test_ec_public.key");
-        String keyPem = new String(Files.readAllBytes(path));
-        PublicKey publicKey = Crypto.loadPublicKey(keyPem);
-
-        InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("sys.auth.zts", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
-        provider.signingKeyResolver.addPublicKey("k0", publicKey);
+        provider.initialize("sys.auth.zts", "com.yahoo.athenz.instance.provider.impl.InstanceWorkloadIPTokenProvider", null, keystore);
 
         InstanceConfirmation tokenConfirmation = new InstanceConfirmation();
         tokenConfirmation.setDomain("sports");
@@ -915,133 +564,10 @@ public class InstanceWorkloadIPTokenProviderTest {
         try {
             provider.confirmInstance(confirmation);
             fail();
-        } catch (ResourceException ex) {
-            assertEquals(ex.getCode(), ResourceException.FORBIDDEN);
+        } catch (ProviderResourceException ex) {
+            assertEquals(ex.getCode(), ProviderResourceException.FORBIDDEN);
             assertTrue(ex.getMessage().contains("Service credentials not provided"));
         }
-
-        provider.close();
-        System.clearProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST);
-    }
-
-    @Test
-    public void testValidateRegisterTokenNullIssueDate() throws IOException {
-
-        KeyStore keystore = Mockito.mock(KeyStore.class);
-        Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
-
-        System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api");
-
-        // get our ec public key
-
-        Path path = Paths.get("./src/test/resources/unit_test_ec_public.key");
-        String keyPem = new String(Files.readAllBytes(path));
-        PublicKey publicKey = Crypto.loadPublicKey(keyPem);
-
-        InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("sys.auth.zts", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
-        provider.signingKeyResolver.addPublicKey("k0", publicKey);
-
-        path = Paths.get("./src/test/resources/unit_test_ec_private.key");
-        keyPem = new String(Files.readAllBytes(path));
-        PrivateKey privateKey = Crypto.loadPrivateKey(keyPem);
-
-        // first generate token with no issue date
-
-        final String registerToken = Jwts.builder()
-                .setId("001")
-                .setSubject("sports.api")
-                .setIssuer("sys.auth.zts")
-                .setAudience("sys.auth.zts")
-                .claim(CLAIM_PROVIDER, "sys.auth.zts")
-                .claim(CLAIM_DOMAIN, "sports")
-                .claim(CLAIM_SERVICE, "api")
-                .claim(CLAIM_INSTANCE_ID, "id001")
-                .claim(CLAIM_WORKLOAD_IP, "127.0.0.1")
-                .claim(CLAIM_CLIENT_ID, "user.athenz")
-                .setHeaderParam(HDR_KEY_ID, "k0")
-                .setHeaderParam(HDR_TOKEN_TYPE, HDR_TOKEN_JWT)
-                .signWith(privateKey, SignatureAlgorithm.ES256)
-                .compact();
-
-
-        // with register instance enabled, this is going to be reject since
-        // there is no issue date
-
-        StringBuilder errMsg = new StringBuilder();
-        assertFalse(provider.validateRegisterToken(registerToken,
-                "sports", "api", "id001", "127.0.0.1", true, errMsg));
-        assertTrue(errMsg.toString().contains("token is already expired, issued at: null"));
-
-        // with refresh option it's going to be skipped
-
-        errMsg.setLength(0);
-        assertTrue(provider.validateRegisterToken(registerToken,
-                "sports", "api", "id001", "127.0.0.1", false, errMsg));
-
-        provider.close();
-        System.clearProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST);
-    }
-
-    @Test
-    public void testValidateRegisterTokenExpiredIssueDate() throws IOException {
-
-        KeyStore keystore = Mockito.mock(KeyStore.class);
-        Mockito.when(keystore.getPublicKey("sports", "api", "v0")).thenReturn(servicePublicKeyStringK0);
-
-        System.setProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST, "sports.api");
-
-        // get our ec public key
-
-        Path path = Paths.get("./src/test/resources/unit_test_ec_public.key");
-        String keyPem = new String(Files.readAllBytes(path));
-        PublicKey publicKey = Crypto.loadPublicKey(keyPem);
-
-        InstanceWorkloadIPTokenProvider provider = new InstanceWorkloadIPTokenProvider();
-        provider.initialize("sys.auth.zts", "com.yahoo.athenz.instance.provider.impl.InstanceZTSProvider", null, keystore);
-        provider.signingKeyResolver.addPublicKey("k0", publicKey);
-
-        path = Paths.get("./src/test/resources/unit_test_ec_private.key");
-        keyPem = new String(Files.readAllBytes(path));
-        PrivateKey privateKey = Crypto.loadPrivateKey(keyPem);
-
-        // first generate token with no issue date
-
-        Instant issueTime = Instant.ofEpochMilli(System.currentTimeMillis() -
-                TimeUnit.MINUTES.toMillis(31));
-        Date issueDate = Date.from(issueTime);
-
-        final String registerToken = Jwts.builder()
-                .setId("001")
-                .setSubject("sports.api")
-                .setIssuedAt(issueDate)
-                .setIssuer("sys.auth.zts")
-                .setAudience("sys.auth.zts")
-                .claim(CLAIM_PROVIDER, "sys.auth.zts")
-                .claim(CLAIM_DOMAIN, "sports")
-                .claim(CLAIM_SERVICE, "api")
-                .claim(CLAIM_INSTANCE_ID, "id001")
-                .claim(CLAIM_WORKLOAD_IP, "127.0.0.1")
-                .claim(CLAIM_CLIENT_ID, "user.athenz")
-                .setHeaderParam(HDR_KEY_ID, "k0")
-                .setHeaderParam(HDR_TOKEN_TYPE, HDR_TOKEN_JWT)
-                .signWith(privateKey, SignatureAlgorithm.ES256)
-                .compact();
-
-
-        // with register instance enabled, this is going to be reject since
-        // there is no issue date
-
-        StringBuilder errMsg = new StringBuilder();
-        assertFalse(provider.validateRegisterToken(registerToken,
-                "sports", "api", "id001", "127.0.0.1", true, errMsg));
-        assertTrue(errMsg.toString().contains("token is already expired, issued at: " + issueDate));
-
-        // with refresh option it's going to be skipped
-
-        errMsg.setLength(0);
-        assertTrue(provider.validateRegisterToken(registerToken,
-                "sports", "api", "id001", "127.0.0.1", false, errMsg));
 
         provider.close();
         System.clearProperty(InstanceWorkloadIPTokenProvider.ZTS_PROP_PRINCIPAL_LIST);

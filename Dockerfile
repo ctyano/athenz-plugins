@@ -2,7 +2,7 @@ FROM docker.io/library/maven:3-eclipse-temurin-11-focal as builder
 
 ARG VERSION=
 ARG ATHENZ_VERSION=
-ARG JAVA_VERSION=11
+ARG JAVA_VERSION=17
 # date -u +'%Y-%m-%dT%H:%M:%SZ'
 ARG BUILD_DATE
 # git rev-parse --short HEAD

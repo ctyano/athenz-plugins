@@ -1,35 +1,28 @@
 package com.yahoo.athenz.instance.provider.impl;
 
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.proc.SecurityContext;
+import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.yahoo.athenz.auth.KeyStore;
-import com.yahoo.athenz.auth.token.PrincipalToken;
-import com.yahoo.athenz.auth.token.Token;
+import com.yahoo.athenz.auth.token.jwts.JwtsHelper;
 import com.yahoo.athenz.auth.token.jwts.JwtsSigningKeyResolver;
 import com.yahoo.athenz.common.server.dns.HostnameResolver;
-import com.yahoo.athenz.common.server.util.ResourceUtils;
 import com.yahoo.athenz.instance.provider.InstanceConfirmation;
 import com.yahoo.athenz.instance.provider.InstanceProvider;
-import com.yahoo.athenz.instance.provider.ResourceException;
-import com.yahoo.athenz.zts.InstanceRegisterToken;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import com.yahoo.athenz.instance.provider.ProviderResourceException;
 import org.eclipse.jetty.util.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLContext;
 import java.security.PrivateKey;
-import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InstanceWorkloadIPTokenProvider.class);
-    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
     private static final String URI_HOSTNAME_PREFIX = "athenz://hostname/";
 
     static final String ZTS_PROP_PROVIDER_DNS_SUFFIX  = "athenz.zts.provider_dns_suffix";
@@ -54,10 +47,12 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
     Set<String> dnsSuffixes = null;
     String provider = null;
     String keyId = null;
+    JWSSigner signer = null;
+    JWSAlgorithm sigAlg = null;
     PrivateKey key = null;
-    SignatureAlgorithm keyAlg = null;
     Set<String> principals = null;
     HostnameResolver hostnameResolver = null;
+    ConfigurableJWTProcessor<SecurityContext> jwtProcessor = null;
     JwtsSigningKeyResolver signingKeyResolver = null;
     int expiryTime;
 
@@ -90,24 +85,17 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
             dnsSuffix = "zts.athenz.cloud";
         }
         dnsSuffixes.addAll(Arrays.asList(dnsSuffix.split(",")));
-
-        this.keyStore = keyStore;
-
-        // get expiry time for any generated tokens - default 30 mins
-
-        final String expiryTimeStr = System.getProperty(ZTS_PROP_EXPIRY_TIME, "30");
-        expiryTime = Integer.parseInt(expiryTimeStr);
-
-        // initialize our jwt key resolver
-
-        signingKeyResolver = new JwtsSigningKeyResolver(null, null);
     }
 
     @Override
-    public void setPrivateKey(PrivateKey key, String keyId, SignatureAlgorithm keyAlg) {
-        this.key = key;
+    public void setPrivateKey(PrivateKey key, String keyId, String sigAlg) {
         this.keyId = keyId;
-        this.keyAlg = keyAlg;
+        this.sigAlg = JWSAlgorithm.parse(sigAlg);
+        try {
+            this.signer = JwtsHelper.getJWSSigner(key);
+        } catch (JOSEException ex) {
+            throw new IllegalArgumentException("Unable to create signer: " + ex.getMessage());
+        }
     }
 
     @Override
@@ -115,22 +103,22 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
         this.hostnameResolver = hostnameResolver;
     }
 
-    private ResourceException forbiddenError(String message) {
+    private ProviderResourceException forbiddenError(String message) {
         LOGGER.error(message);
-        return new ResourceException(ResourceException.FORBIDDEN, message);
+        return new ProviderResourceException(ProviderResourceException.FORBIDDEN, message);
     }
 
     @Override
-    public InstanceConfirmation confirmInstance(InstanceConfirmation confirmation) {
+    public InstanceConfirmation confirmInstance(InstanceConfirmation confirmation) throws ProviderResourceException {
         return validateInstanceRequest(confirmation, true);
     }
 
     @Override
-    public InstanceConfirmation refreshInstance(InstanceConfirmation confirmation) {
+    public InstanceConfirmation refreshInstance(InstanceConfirmation confirmation) throws ProviderResourceException {
         return validateInstanceRequest(confirmation, false);
     }
 
-    InstanceConfirmation validateInstanceRequest(InstanceConfirmation confirmation, boolean registerInstance) {
+    InstanceConfirmation validateInstanceRequest(InstanceConfirmation confirmation, boolean registerInstance) throws ProviderResourceException {
 
         // we need to validate the token which is our attestation
         // data for the service requesting a certificate
@@ -139,8 +127,6 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
         final String instanceService = confirmation.getService();
 
         final Map<String, String> instanceAttributes = confirmation.getAttributes();
-        final String csrPublicKey = InstanceUtils.getInstanceProperty(instanceAttributes,
-                InstanceProvider.ZTS_INSTANCE_CSR_PUBLIC_KEY);
 
         // make sure this service has been configured to be supported
         // by this zts provider
@@ -159,37 +145,11 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
             throw forbiddenError("Service credentials not provided");
         }
 
-        boolean tokenValidated;
         Map<String, String> attributes;
-        StringBuilder errMsg = new StringBuilder(256);
-        if (attestationData.startsWith("v=S1;")) {
 
-            // set our cert attributes in the return object
-            // for ZTS we do not allow refresh of those certificates
+        // for token based request we do support refresh operation
 
-            attributes = new HashMap<>();
-            attributes.put(InstanceProvider.ZTS_CERT_REFRESH, "false");
-
-            tokenValidated = validateServiceToken(attestationData, instanceDomain,
-                    instanceService, csrPublicKey, errMsg);
-
-        } else {
-
-            // for token based request we do support refresh operation
-
-            attributes = Collections.emptyMap();
-
-            final String instanceId = InstanceUtils.getInstanceProperty(instanceAttributes,
-                    InstanceProvider.ZTS_INSTANCE_ID);
-            tokenValidated = validateRegisterToken(attestationData, instanceDomain,
-                    instanceService, instanceId, InstanceUtils.getInstanceProperty(instanceAttributes,
-                            InstanceProvider.ZTS_INSTANCE_CLIENT_IP), registerInstance, errMsg);
-        }
-
-        if (!tokenValidated) {
-            LOGGER.error(errMsg.toString());
-            throw forbiddenError("Unable to validate Certificate Request Auth Token");
-        }
+        attributes = Collections.emptyMap();
 
         final String clientIp = InstanceUtils.getInstanceProperty(instanceAttributes,
                 InstanceProvider.ZTS_INSTANCE_CLIENT_IP);
@@ -337,190 +297,5 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
         }
 
         return true;
-    }
-
-    boolean validateServiceToken(final String signedToken, final String domainName,
-            final String serviceName, final String csrPublicKey, StringBuilder errMsg) {
-        
-        final PrincipalToken serviceToken = authenticate(signedToken, keyStore, csrPublicKey, errMsg);
-        if (serviceToken == null) {
-            return false;
-        }
-        
-        // verify that domain and service name match
-        
-        if (!serviceToken.getDomain().equalsIgnoreCase(domainName)) {
-            errMsg.append("validate failed: domain mismatch: ").
-                append(serviceToken.getDomain()).append(" vs. ").append(domainName);
-            return false;
-        }
-        
-        if (!serviceToken.getName().equalsIgnoreCase(serviceName)) {
-            errMsg.append("validate failed: service mismatch: ").
-                append(serviceToken.getName()).append(" vs. ").append(serviceName);
-            return false;
-        }
-
-        return true;
-    }
-
-    @Override
-	public InstanceRegisterToken getInstanceRegisterToken(InstanceConfirmation details) {
-	
-	    // ZTS Server has already verified that the caller has update
-	    // rights over the given service so we'll just generate
-	    // an instance register token and return to the client
-	
-	    final String principal = InstanceUtils.getInstanceProperty(details.getAttributes(),
-	            InstanceProvider.ZTS_REQUEST_PRINCIPAL);
-	    final String instanceId = InstanceUtils.getInstanceProperty(details.getAttributes(),
-	            InstanceProvider.ZTS_INSTANCE_ID);
-	    final String workloadIp = InstanceUtils.getInstanceProperty(details.getAttributes(),
-	            InstanceWorkloadIPTokenProvider.ZTS_INSTANCE_WORKLOAD_IP);
-	    final String tokenId = UUID.randomUUID().toString();
-	
-	    // first we'll generate and sign our token
-	
-	    final String registerToken = Jwts.builder()
-	            .setId(tokenId)
-	            .setSubject(ResourceUtils.serviceResourceName(details.getDomain(), details.getService()))
-	            .setIssuedAt(Date.from(Instant.now()))
-	            .setIssuer(provider)
-	            .setAudience(provider)
-	            .claim(CLAIM_PROVIDER, details.getProvider())
-	            .claim(CLAIM_DOMAIN, details.getDomain())
-	            .claim(CLAIM_SERVICE, details.getService())
-	            .claim(CLAIM_INSTANCE_ID, instanceId)
-	            .claim(CLAIM_CLIENT_ID, principal)
-	            .claim(CLAIM_WORKLOAD_IP, workloadIp)
-	            .setHeaderParam(HDR_KEY_ID, keyId)
-	            .setHeaderParam(HDR_TOKEN_TYPE, HDR_TOKEN_JWT)
-	            .signWith(key, keyAlg)
-	            .compact();
-	    
-	    // finally return our token to the caller
-	
-	    return new InstanceRegisterToken()
-	            .setProvider(details.getProvider())
-	            .setDomain(details.getDomain())
-	            .setService(details.getService())
-	            .setAttestationData(registerToken);
-	}
-
-	boolean validateRegisterToken(final String jwToken, final String domainName, final String serviceName,
-                                  final String instanceId, final String clientIp, boolean registerInstance, StringBuilder errMsg) {
-
-        Jws<Claims> claims = Jwts.parserBuilder()
-                .setSigningKeyResolver(signingKeyResolver)
-                .setAllowedClockSkewSeconds(60)
-                .build()
-                .parseClaimsJws(jwToken);
-
-        // verify that token audience is set for our service
-
-        Claims claimsBody = claims.getBody();
-        if (!ZTS_PROVIDER_SERVICE.equals(claimsBody.getAudience())) {
-            errMsg.append("token audience is not ZTS provider: ").append(claimsBody.getAudience());
-            return false;
-        }
-
-        // need to verify that the issue time is not before our expiry
-        // only for register requests.
-
-        if (registerInstance) {
-            Date issueDate = claimsBody.getIssuedAt();
-            if (issueDate == null || issueDate.getTime() < System.currentTimeMillis() -
-                    TimeUnit.MINUTES.toMillis(expiryTime)) {
-                errMsg.append("token is already expired, issued at: ").append(issueDate);
-                return false;
-            }
-        }
-
-        // verify provider, domain, service, and instance id values
-
-        if (!domainName.equals(claimsBody.get(CLAIM_DOMAIN, String.class))) {
-            errMsg.append("invalid domain name in token: ").append(claimsBody.get(CLAIM_DOMAIN, String.class));
-            return false;
-        }
-        if (!serviceName.equals(claimsBody.get(CLAIM_SERVICE, String.class))) {
-            errMsg.append("invalid service name in token: ").append(claimsBody.get(CLAIM_SERVICE, String.class));
-            return false;
-        }
-        if (!instanceId.equals(claimsBody.get(CLAIM_INSTANCE_ID, String.class))) {
-            errMsg.append("invalid instance id in token: ").append(claimsBody.get(CLAIM_INSTANCE_ID, String.class));
-            return false;
-        }
-        if (!clientIp.equals(claimsBody.get(CLAIM_WORKLOAD_IP, String.class))) {
-            errMsg.append("invalid workload ip in token: ").append(claimsBody.get(CLAIM_WORKLOAD_IP, String.class));
-            return false;
-        }
-        if (!ZTS_PROVIDER_SERVICE.equals(claimsBody.get(CLAIM_PROVIDER, String.class))) {
-            errMsg.append("invalid provider name in token: ").append(claimsBody.get(CLAIM_PROVIDER, String.class));
-            return false;
-        }
-
-        return true;
-    }
-
-    PrincipalToken authenticate(final String signedToken, KeyStore keyStore,
-            final String csrPublicKey, StringBuilder errMsg) {
-
-        PrincipalToken serviceToken;
-        try {
-            serviceToken = new PrincipalToken(signedToken);
-        } catch (IllegalArgumentException ex) {
-            errMsg.append("authenticate failed: Invalid token: exc=").
-                    append(ex.getMessage()).append(" : credential=").
-                    append(Token.getUnsignedToken(signedToken));
-            LOGGER.error(errMsg.toString());
-            return null;
-        }
-
-        // before authenticating verify that this is not an authorized
-        // service token
-
-        if (serviceToken.getAuthorizedServices() != null) {
-            errMsg.append("authenticate failed: authorized service token")
-                    .append(" : credential=").append(Token.getUnsignedToken(signedToken));
-            LOGGER.error(errMsg.toString());
-            return null;
-        }
-
-        final String tokenDomain = serviceToken.getDomain().toLowerCase();
-        final String tokenName = serviceToken.getName().toLowerCase();
-
-        // get the public key for this token to validate signature
-
-        final String publicKey = keyStore.getPublicKey(tokenDomain, tokenName,
-                serviceToken.getKeyId());
-
-        if (!serviceToken.validate(publicKey, 300, false, errMsg)) {
-            return null;
-        }
-
-        // finally we want to make sure the public key in the csr
-        // matches the public key registered in Athenz
-
-        if (!validatePublicKeys(publicKey, csrPublicKey)) {
-            errMsg.append("CSR and Athenz public key mismatch");
-            LOGGER.error(errMsg.toString());
-            return null;
-        }
-
-        return serviceToken;
-    }
-
-    public boolean validatePublicKeys(final String athenzPublicKey, final String csrPublicKey) {
-
-        // we are going to remove all whitespace, new lines
-        // in order to compare the pem encoded keys
-
-        Matcher matcher = WHITESPACE_PATTERN.matcher(athenzPublicKey);
-        final String normAthenzPublicKey = matcher.replaceAll("");
-
-        matcher = WHITESPACE_PATTERN.matcher(csrPublicKey);
-        final String normCsrPublicKey = matcher.replaceAll("");
-
-        return normAthenzPublicKey.equals(normCsrPublicKey);
     }
 }
