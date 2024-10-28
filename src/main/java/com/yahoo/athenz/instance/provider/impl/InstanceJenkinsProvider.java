@@ -33,19 +33,16 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     private static final String URI_INSTANCE_ID_PREFIX = "athenz://instanceid/";
     private static final String URI_SPIFFE_PREFIX = "spiffe://";
 
-    static final String JENKINS_PROP_PROVIDER_DNS_SUFFIX  = "ajenkins.provider_dns_suffix";
+    static final String JENKINS_PROP_PROVIDER_DNS_SUFFIX  = "athenz.zts.jenkins.provider_dns_suffix";
     static final String JENKINS_PROP_BOOT_TIME_OFFSET     = "athenz.zts.jenkins.boot_time_offset";
-    static final String JENKINS_PROP_CERT_EXPIRY_TIME     = "athenz.zts.jenkins.cert_expiry_time";
-    static final String JENKINS_PROP_ENTERPRISE           = "athenz.zts.jenkins.enterprise";
+    static final String JENKINS_PROP_CERT_EXPIRY_TIME     = "athenz.zts.jenkins.cert_expiry_minutes";
     static final String JENKINS_PROP_AUDIENCE             = "athenz.zts.jenkins.audience";
     static final String JENKINS_PROP_ISSUER               = "athenz.zts.jenkins.issuer";
     static final String JENKINS_PROP_JWKS_URI             = "athenz.zts.jenkins.jwks_uri";
 
     static final String JENKINS_RUN_ID          = "sub";
-    static final String JENKINS_ISSUER          = "https://jenkins.io";
-    static final String JENKINS_ISSUER_JWKS_URI = "https://jenkins.io/.well-known/jwks";
-
-    public static final String CLAIM_REPOSITORY    = "repository";
+    static final String JENKINS_ISSUER          = "https://jenkins.athenz.svc.cluster.local/oidc";
+    static final String JENKINS_ISSUER_JWKS_URI = "https://jenkins.athenz.svc.cluster.local/oidc/jwks";
 
     Set<String> dnsSuffixes = null;
     String jenkinsIssuer = null;
@@ -85,10 +82,6 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         long timeout = TimeUnit.SECONDS.convert(5, TimeUnit.MINUTES);
         bootTimeOffsetSeconds = new DynamicConfigLong(CONFIG_MANAGER, JENKINS_PROP_BOOT_TIME_OFFSET, timeout);
-
-        // determine if we're running in enterprise mode
-
-        enterprise = System.getProperty(JENKINS_PROP_ENTERPRISE);
 
         // get default/max expiry time for any generated tokens - 6 hours
 

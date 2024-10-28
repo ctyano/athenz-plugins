@@ -39,10 +39,8 @@ public class InstanceJenkinsProviderTest {
 
     @AfterMethod
     public void tearDown() {
-        System.clearProperty(InstanceJenkinsProvider.JENKINS_PROP_ENTERPRISE);
         System.clearProperty(InstanceJenkinsProvider.JENKINS_PROP_JWKS_URI);
         System.clearProperty(InstanceJenkinsProvider.JENKINS_PROP_AUDIENCE);
-        System.clearProperty(InstanceJenkinsProvider.JENKINS_PROP_ENTERPRISE);
         System.clearProperty(InstanceJenkinsProvider.JENKINS_PROP_ISSUER);
     }
 
@@ -64,7 +62,6 @@ public class InstanceJenkinsProviderTest {
     public void testInitializeWithConfig() {
         final String jwksUri = Objects.requireNonNull(classLoader.getResource("jwt_jwks.json")).toString();
         System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_JWKS_URI, jwksUri);
-        System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_ENTERPRISE, "athenz");
 
         InstanceJenkinsProvider provider = new InstanceJenkinsProvider();
         provider.initialize("sys.auth.jenkins",
@@ -122,12 +119,12 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.io/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(true);
         provider.setAuthorizer(authorizer);
 
         Map<String, String> instanceAttributes = new HashMap<>();
-        instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_ID, "jenkins.io:job:test-project:1");
+        instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_ID, "jenkins.athenz.svc.cluster.local:job:test-project:1");
         instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_SAN_URI, "spiffe://ns/default/sports/api,athenz://instanceid/sys.auth.jenkins/athenz:sia:001");
         instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_SAN_DNS, "api.sports.jenkins.athenz.io");
 
@@ -135,7 +132,7 @@ public class InstanceJenkinsProviderTest {
         confirmation.setDomain("sports");
         confirmation.setService("api");
         confirmation.setProvider("sys.auth.jenkins");
-        confirmation.setAttestationData(generateIdToken("https://jenkins.io",
+        confirmation.setAttestationData(generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false));
         confirmation.setAttributes(instanceAttributes);
 
@@ -159,12 +156,12 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.io/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(true);
         provider.setAuthorizer(authorizer);
 
         Map<String, String> instanceAttributes = new HashMap<>();
-        instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_ID, "jenkins.io:job:test-project:1");
+        instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_ID, "jenkins.athenz.svc.cluster.local:job:test-project:1");
         instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_SAN_URI, "spiffe://ns/default/sports/api,athenz://instanceid/sys.auth.jenkins/athenz:sia:001");
         instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_SAN_DNS, "host1.athenz.io");
 
@@ -172,7 +169,7 @@ public class InstanceJenkinsProviderTest {
         confirmation.setDomain("sports");
         confirmation.setService("api");
         confirmation.setProvider("sys.auth.jenkins");
-        confirmation.setAttestationData(generateIdToken("https://jenkins.io",
+        confirmation.setAttestationData(generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false));
         confirmation.setAttributes(instanceAttributes);
 
@@ -200,12 +197,12 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.io/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(true);
         provider.setAuthorizer(authorizer);
 
         Map<String, String> instanceAttributes = new HashMap<>();
-        instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_ID, "jenkins.io:job:test-project:1");
+        instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_ID, "jenkins.athenz.svc.cluster.local:job:test-project:1");
         instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_SAN_URI, "spiffe://ns/default/sports/api,athenz://instanceid/sys.auth.jenkins/athenz:sia:001");
         instanceAttributes.put(InstanceProvider.ZTS_INSTANCE_SAN_DNS, "host1.athenz.io");
 
@@ -213,7 +210,7 @@ public class InstanceJenkinsProviderTest {
         confirmation.setDomain("sports");
         confirmation.setService("api");
         confirmation.setProvider("sys.auth.jenkins");
-        confirmation.setAttestationData(generateIdToken("https://jenkins.io",
+        confirmation.setAttestationData(generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false));
         confirmation.setAttributes(instanceAttributes);
 
@@ -376,7 +373,7 @@ public class InstanceJenkinsProviderTest {
         InstanceJenkinsProvider provider = new InstanceJenkinsProvider();
 
         StringBuilder errMsg = new StringBuilder(256);
-        assertFalse(provider.validateOIDCToken("some-jwt", "sports", "api", "jenkins.io:job:test-project:1", errMsg));
+        assertFalse(provider.validateOIDCToken("some-jwt", "sports", "api", "jenkins.athenz.svc.cluster.local:job:test-project:1", errMsg));
         assertTrue(errMsg.toString().contains("JWT Processor not initialized"));
 
         provider.close();
@@ -397,7 +394,7 @@ public class InstanceJenkinsProviderTest {
         String idToken = generateIdToken("https://token.actions.githubusercontent.com",
                 System.currentTimeMillis() / 1000, false, false);
         StringBuilder errMsg = new StringBuilder(256);
-        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.io:job:test-project:1", errMsg);
+        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.athenz.svc.cluster.local:job:test-project:1", errMsg);
         assertFalse(result);
         assertTrue(errMsg.toString().contains("token issuer is not Jenkins"));
     }
@@ -414,10 +411,10 @@ public class InstanceJenkinsProviderTest {
 
         // our audience will not match
 
-        String idToken = generateIdToken("https://jenkins.io",
+        String idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false);
         StringBuilder errMsg = new StringBuilder(256);
-        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.io:job:test-project:1", errMsg);
+        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.athenz.svc.cluster.local:job:test-project:1", errMsg);
         assertFalse(result);
         assertTrue(errMsg.toString().contains("token audience is not ZTS Server audience"));
     }
@@ -435,19 +432,19 @@ public class InstanceJenkinsProviderTest {
 
         // our issue time is not recent enough
 
-        String idToken = generateIdToken("https://jenkins.io",
+        String idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000 - 400, false, false);
         StringBuilder errMsg = new StringBuilder(256);
-        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.io:job:test-project:1", errMsg);
+        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.athenz.svc.cluster.local:job:test-project:1", errMsg);
         assertFalse(result);
         assertTrue(errMsg.toString().contains("job start time is not recent enough"));
 
         // create another token without the issue time
 
-        idToken = generateIdToken("https://jenkins.io",
+        idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, true);
         errMsg.setLength(0);
-        result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.io:job:test-project:1", errMsg);
+        result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.athenz.svc.cluster.local:job:test-project:1", errMsg);
         assertFalse(result);
         assertTrue(errMsg.toString().contains("job start time is not recent enough"));
     }
@@ -457,7 +454,6 @@ public class InstanceJenkinsProviderTest {
         final String jwksUri = Objects.requireNonNull(classLoader.getResource("jwt_jwks.json")).toString();
         System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_JWKS_URI, jwksUri);
         System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_AUDIENCE, "https://athenz.io");
-        System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_ENTERPRISE, "athenz");
 
         InstanceJenkinsProvider provider = new InstanceJenkinsProvider();
         provider.initialize("sys.auth.jenkins",
@@ -465,11 +461,11 @@ public class InstanceJenkinsProviderTest {
 
         // create an id token without the subject claim
 
-        String idToken = generateIdToken("https://jenkins.io",
+        String idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, true, false);
 
         StringBuilder errMsg = new StringBuilder(256);
-        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.io:job:test-project:1", errMsg);
+        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.athenz.svc.cluster.local:job:test-project:1", errMsg);
         assertFalse(result);
         assertEquals(errMsg.toString(),"token does not contain required subject claim");
         assertTrue(errMsg.toString().contains("token does not contain required subject claim"));
@@ -481,7 +477,6 @@ public class InstanceJenkinsProviderTest {
         final String jwksUri = Objects.requireNonNull(classLoader.getResource("jwt_jwks.json")).toString();
         System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_JWKS_URI, jwksUri);
         System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_AUDIENCE, "https://athenz.io");
-        System.setProperty(InstanceJenkinsProvider.JENKINS_PROP_ENTERPRISE, "athenz");
 
         InstanceJenkinsProvider provider = new InstanceJenkinsProvider();
         provider.initialize("sys.auth.jenkins",
@@ -489,17 +484,17 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.io/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(false);
         provider.setAuthorizer(authorizer);
 
         // create an id token
 
-        String idToken = generateIdToken("https://jenkins.io",
+        String idToken = generateIdToken("https://jenkins.athenz.svc.cluster.local/oidc",
                 System.currentTimeMillis() / 1000, false, false);
 
         StringBuilder errMsg = new StringBuilder(256);
-        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.io:job:test-project:1", errMsg);
+        boolean result = provider.validateOIDCToken(idToken, "sports", "api", "jenkins.athenz.svc.cluster.local:job:test-project:1", errMsg);
         assertFalse(result);
         assertTrue(errMsg.toString().contains("authorization check failed for action"));
     }
@@ -516,7 +511,7 @@ public class InstanceJenkinsProviderTest {
                 .audience("https://athenz.io")
                 .claim("enterprise", "athenz");
         if (!skipSubject) {
-            claimsSetBuilder.subject("https://jenkins.io/job/test-project/1");
+            claimsSetBuilder.subject("https://jenkins.athenz.svc.cluster.local/job/test-project/1");
         }
         if (!skipIssuedAt) {
             claimsSetBuilder.issueTime(Date.from(Instant.ofEpochSecond(currentTimeSecs)));
