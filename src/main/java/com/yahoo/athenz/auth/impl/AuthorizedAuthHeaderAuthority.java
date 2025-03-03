@@ -38,6 +38,11 @@ public class AuthorizedAuthHeaderAuthority implements Authority {
     public String getID() {
         return "Authorized-Auth-Header";
     }
+    
+    @Override
+    public CredSource getCredSource() {
+        return CredSource.REQUEST;
+    }
 
     @Override
     public String getDomain() {
