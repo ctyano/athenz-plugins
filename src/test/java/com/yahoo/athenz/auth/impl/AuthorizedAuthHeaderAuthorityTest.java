@@ -69,6 +69,8 @@ public class AuthorizedAuthHeaderAuthorityTest {
 
         // untrusted remote ip
         errMsg = new StringBuilder();
+        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn(testUser);
+        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_AUTHORIZED_SERVICE_DEFAULT)).thenReturn(testAuthorizedService);
         Mockito.when(httpServletRequest.getRemoteAddr()).thenReturn("192.168.0.2");
         principal = aaha.authenticate(httpServletRequest, errMsg);
         assertNull(principal);
@@ -76,11 +78,12 @@ public class AuthorizedAuthHeaderAuthorityTest {
 
         // Failed to create principal
         errMsg = new StringBuilder();
+        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn(null);
+        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_AUTHORIZED_SERVICE_DEFAULT)).thenReturn(testAuthorizedService);
         Mockito.when(httpServletRequest.getRemoteAddr()).thenReturn(remoteAddr);
-        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn("");
         principal = aaha.authenticate(httpServletRequest, errMsg);
         assertNull(principal);
-        assertEquals(errMsg.toString(), "AuthorizedAuthHeaderAuthority.authenticate: invalid user= authorized service=authorized-service");
+        assertEquals(errMsg.toString(), "AuthorizedAuthHeaderAuthority.authenticate: invalid user");
     }
 
     @Test

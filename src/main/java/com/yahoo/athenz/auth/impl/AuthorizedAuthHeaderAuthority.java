@@ -80,9 +80,8 @@ public class AuthorizedAuthHeaderAuthority implements Authority {
         String username = request.getHeader(this.getHeader());
         String authorizedServiceName = request.getHeader(this.getAuthorizedServiceHeader());
         
-        if (username.isEmpty()) {
-            errMsg.append("AuthorizedAuthHeaderAuthority.authenticate: invalid user=").append(username)
-                .append(" authorized service=").append(authorizedServiceName);
+        if (username == null || username.isEmpty()) {
+            errMsg.append("AuthorizedAuthHeaderAuthority.authenticate: invalid user");
             LOG.error(errMsg.toString());
         	return null;
         }
@@ -108,7 +107,8 @@ public class AuthorizedAuthHeaderAuthority implements Authority {
             return null;
         }
         princ.setUnsignedCreds(username);
-        if (authorizedServiceName != "") {
+
+        if (authorizedServiceName != null && !authorizedServiceName.isEmpty()) {
             princ.setAuthorizedService(authorizedServiceName);
         }
         
