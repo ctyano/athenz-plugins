@@ -83,7 +83,7 @@ public class AuthorizedAuthHeaderAuthorityTest {
         Mockito.when(httpServletRequest.getRemoteAddr()).thenReturn(remoteAddr);
         principal = aaha.authenticate(httpServletRequest, errMsg);
         assertNull(principal);
-        assertEquals(errMsg.toString(), "AuthorizedAuthHeaderAuthority.authenticate: invalid user");
+        assertEquals(errMsg.toString(), "");
     }
 
     @Test

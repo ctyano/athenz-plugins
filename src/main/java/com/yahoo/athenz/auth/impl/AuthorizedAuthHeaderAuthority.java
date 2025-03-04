@@ -80,14 +80,13 @@ public class AuthorizedAuthHeaderAuthority implements Authority {
         String username = request.getHeader(this.getHeader());
         String authorizedServiceName = request.getHeader(this.getAuthorizedServiceHeader());
         
-        if (username == null || username.isEmpty()) {
-            errMsg.append("AuthorizedAuthHeaderAuthority.authenticate: invalid user");
-            LOG.error(errMsg.toString());
-        	return null;
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("AuthorizedAuthHeaderAuthority.authenticate: username={} authorized service={}", username, authorizedServiceName);
         }
         
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("AuthorizedAuthHeaderAuthority.authenticate: valid user={} authorized service={}", username, authorizedServiceName);
+        if (username == null || username.isEmpty()) {
+            LOG.warn("AuthorizedAuthHeaderAuthority.authenticate: invalid username={}", username);
+        	return null;
         }
 
         String remoteAddr = ServletRequestUtil.getRemoteAddress(request);

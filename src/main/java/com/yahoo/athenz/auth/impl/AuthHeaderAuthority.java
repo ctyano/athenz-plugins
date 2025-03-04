@@ -59,7 +59,12 @@ public class AuthHeaderAuthority implements Authority {
         errMsg = errMsg == null ? new StringBuilder(512) : errMsg;
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug("AuthHeaderAuthority.authenticate: valid user={}", username);
+            LOG.debug("AuthHeaderAuthority.authenticate: username={}", username);
+        }
+        
+        if (username == null || username.isEmpty()) {
+            LOG.warn("AuthorizedAuthHeaderAuthority.authenticate: invalid username={}", username);
+        	return null;
         }
 
         if (!checkIpAddressMatch(remoteAddr)) {
