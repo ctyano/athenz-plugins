@@ -9,45 +9,45 @@ import org.testng.annotations.Test;
 
 import static org.testng.Assert.*;
 
-public class AuthorizedAuthHeaderAuthorityTest {
+public class AuthorizedServiceAuthHeaderAuthorityTest {
 
     @Test
     public void testGetID() {
-    	AuthorizedAuthHeaderAuthority aaha = new AuthorizedAuthHeaderAuthority();
+    	AuthorizedServiceAuthHeaderAuthority aaha = new AuthorizedServiceAuthHeaderAuthority();
         assertEquals(aaha.getID(), "Authorized-Auth-Header");
     }
 
     @Test
     public void testGetDomain() {
-        AuthorizedAuthHeaderAuthority aaha = new AuthorizedAuthHeaderAuthority();
+        AuthorizedServiceAuthHeaderAuthority aaha = new AuthorizedServiceAuthHeaderAuthority();
         assertEquals(aaha.getDomain(), "user");
     }
 
     @Test
     public void testGetHeader() {
-        AuthorizedAuthHeaderAuthority aaha = new AuthorizedAuthHeaderAuthority();
+        AuthorizedServiceAuthHeaderAuthority aaha = new AuthorizedServiceAuthHeaderAuthority();
         assertEquals(aaha.getHeader(), "X-Auth-User");
     }
 
     @Test
     public void testGetAuthenticateChallenge() {
-        AuthorizedAuthHeaderAuthority aaha = new AuthorizedAuthHeaderAuthority();
+        AuthorizedServiceAuthHeaderAuthority aaha = new AuthorizedServiceAuthHeaderAuthority();
         assertEquals(aaha.getAuthenticateChallenge(), null);
     }
 
     @Test
     public void testAllowAuthorization() {
-        AuthorizedAuthHeaderAuthority aaha = new AuthorizedAuthHeaderAuthority();
+        AuthorizedServiceAuthHeaderAuthority aaha = new AuthorizedServiceAuthHeaderAuthority();
         assertTrue(aaha.allowAuthorization());
     }
 
     @Test
     public void testAuthenticate() {
-        AuthorizedAuthHeaderAuthority aaha = new AuthorizedAuthHeaderAuthority();
+        AuthorizedServiceAuthHeaderAuthority aaha = new AuthorizedServiceAuthHeaderAuthority();
         StringBuilder errMsg = new StringBuilder();
 
         try {
-        	System.setProperty(AuthorizedAuthHeaderAuthority.ATHENZ_PROP_AUTH_HEADER_TRUSTED_CIDR, "127.0.0.1,192.168.0.1");
+        	System.setProperty(AuthorizedServiceAuthHeaderAuthority.ATHENZ_PROP_AUTH_HEADER_TRUSTED_CIDR, "127.0.0.1,192.168.0.1");
         	aaha.initialize();
         }catch (Exception ex) {
             fail();
@@ -58,8 +58,8 @@ public class AuthorizedAuthHeaderAuthorityTest {
         String remoteAddr = "127.0.0.1";
 
         HttpServletRequest httpServletRequest = Mockito.mock(HttpServletRequest.class);
-        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn(testUser);
-        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_AUTHORIZED_SERVICE_DEFAULT)).thenReturn(testAuthorizedService);
+        Mockito.when(httpServletRequest.getHeader(AuthorizedServiceAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn(testUser);
+        Mockito.when(httpServletRequest.getHeader(AuthorizedServiceAuthHeaderAuthority.AUTH_HEADER_AUTHORIZED_SERVICE_DEFAULT)).thenReturn(testAuthorizedService);
         Mockito.when(httpServletRequest.getRemoteAddr()).thenReturn(remoteAddr);
         
         // happy path
@@ -69,17 +69,17 @@ public class AuthorizedAuthHeaderAuthorityTest {
 
         // untrusted remote ip
         errMsg = new StringBuilder();
-        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn(testUser);
-        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_AUTHORIZED_SERVICE_DEFAULT)).thenReturn(testAuthorizedService);
+        Mockito.when(httpServletRequest.getHeader(AuthorizedServiceAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn(testUser);
+        Mockito.when(httpServletRequest.getHeader(AuthorizedServiceAuthHeaderAuthority.AUTH_HEADER_AUTHORIZED_SERVICE_DEFAULT)).thenReturn(testAuthorizedService);
         Mockito.when(httpServletRequest.getRemoteAddr()).thenReturn("192.168.0.2");
         principal = aaha.authenticate(httpServletRequest, errMsg);
         assertNull(principal);
-        assertEquals(errMsg.toString(), "AuthorizedAuthHeaderAuthority:authenticate: remote ip address is not trusted: ip=192.168.0.2");
+        assertEquals(errMsg.toString(), "AuthorizedServiceAuthHeaderAuthority:authenticate: remote ip address is not trusted: ip=192.168.0.2");
 
         // Failed to create principal
         errMsg = new StringBuilder();
-        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn(null);
-        Mockito.when(httpServletRequest.getHeader(AuthorizedAuthHeaderAuthority.AUTH_HEADER_AUTHORIZED_SERVICE_DEFAULT)).thenReturn(testAuthorizedService);
+        Mockito.when(httpServletRequest.getHeader(AuthorizedServiceAuthHeaderAuthority.AUTH_HEADER_USER_DEFAULT)).thenReturn(null);
+        Mockito.when(httpServletRequest.getHeader(AuthorizedServiceAuthHeaderAuthority.AUTH_HEADER_AUTHORIZED_SERVICE_DEFAULT)).thenReturn(testAuthorizedService);
         Mockito.when(httpServletRequest.getRemoteAddr()).thenReturn(remoteAddr);
         principal = aaha.authenticate(httpServletRequest, errMsg);
         assertNull(principal);
@@ -88,10 +88,10 @@ public class AuthorizedAuthHeaderAuthorityTest {
 
     @Test
     public void testGetSimplePrincipal() {
-        AuthorizedAuthHeaderAuthority aaha = new AuthorizedAuthHeaderAuthority();
+        AuthorizedServiceAuthHeaderAuthority aaha = new AuthorizedServiceAuthHeaderAuthority();
         long issueTime = System.currentTimeMillis();
         SimplePrincipal sp = aaha.getSimplePrincipal("abc", "xyz", issueTime);
         assertNotNull(sp);
-        assertEquals(sp.getAuthority().getClass(), AuthorizedAuthHeaderAuthority.class);
+        assertEquals(sp.getAuthority().getClass(), AuthorizedServiceAuthHeaderAuthority.class);
     }
 }

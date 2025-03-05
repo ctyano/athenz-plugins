@@ -12,9 +12,9 @@ import com.yahoo.athenz.common.server.util.ServletRequestUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-public class AuthorizedAuthHeaderAuthority implements Authority {
+public class AuthorizedServiceAuthHeaderAuthority implements Authority {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AuthorizedAuthHeaderAuthority.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AuthorizedServiceAuthHeaderAuthority.class);
 
     public static final String AUTH_HEADER_USER_DEFAULT = "X-Auth-User";
     public static final String ATHENZ_PROP_AUTH_HEADER_USER = "athenz.auth.principal.auth.header.user";
@@ -81,17 +81,17 @@ public class AuthorizedAuthHeaderAuthority implements Authority {
         String authorizedServiceName = request.getHeader(this.getAuthorizedServiceHeader());
         
         if (LOG.isDebugEnabled()) {
-            LOG.debug("AuthorizedAuthHeaderAuthority.authenticate: username={} authorized service={}", username, authorizedServiceName);
+            LOG.debug("AuthorizedServiceAuthHeaderAuthority.authenticate: username={} authorized service={}", username, authorizedServiceName);
         }
         
         if (username == null || username.isEmpty()) {
-            LOG.warn("AuthorizedAuthHeaderAuthority.authenticate: invalid username={}", username);
+            LOG.warn("AuthorizedServiceAuthHeaderAuthority.authenticate: invalid username={}", username);
         	return null;
         }
 
         String remoteAddr = ServletRequestUtil.getRemoteAddress(request);
         if (!checkIpAddressMatch(remoteAddr)) {
-            errMsg.append("AuthorizedAuthHeaderAuthority:authenticate: remote ip address is not trusted: ip=")
+            errMsg.append("AuthorizedServiceAuthHeaderAuthority:authenticate: remote ip address is not trusted: ip=")
                 .append(remoteAddr);
             LOG.error(errMsg.toString());
             return null;
@@ -100,7 +100,7 @@ public class AuthorizedAuthHeaderAuthority implements Authority {
         long issueTime = 0;
         SimplePrincipal princ = getSimplePrincipal(username.toLowerCase(), username, issueTime);
         if (princ == null) {
-            errMsg.append("AuthorizedAuthHeaderAuthority:authenticate: failed to create principal: user=")
+            errMsg.append("AuthorizedServiceAuthHeaderAuthority:authenticate: failed to create principal: user=")
                 .append(username);
             LOG.error(errMsg.toString());
             return null;
@@ -127,7 +127,7 @@ public class AuthorizedAuthHeaderAuthority implements Authority {
                     return true;
                 }
 			} catch (IllegalArgumentException e) {
-	            LOG.warn("AuthorizedAuthHeaderAuthority.checkIpAddressMatch: invalid remoteAddr={} message={}", remoteAddr, e.getMessage());
+	            LOG.warn("AuthorizedServiceAuthHeaderAuthority.checkIpAddressMatch: invalid remoteAddr={} message={}", remoteAddr, e.getMessage());
 			}
         }
 		return false;
