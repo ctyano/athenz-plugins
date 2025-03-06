@@ -36,7 +36,7 @@ public class AuthorizedServiceAuthHeaderAuthority implements Authority {
 
     @Override
     public String getID() {
-        return "Authorized-Auth-Header";
+        return "X-Auth-Authorized-Service";
     }
     
     @Override

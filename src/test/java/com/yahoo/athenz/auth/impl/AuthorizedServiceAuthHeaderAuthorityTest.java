@@ -24,7 +24,7 @@ public class AuthorizedServiceAuthHeaderAuthorityTest {
     }
 
     @Test
-    public void testGetHeader() {
+    public void testGetAuthorizedServiceAuthHeader() {
         AuthorizedServiceAuthHeaderAuthority aaha = new AuthorizedServiceAuthHeaderAuthority();
         assertEquals(aaha.getHeader(), "X-Auth-User");
     }
