@@ -305,16 +305,15 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         // we need to extract and generate our action value for the authz check
 
-        final String action = "jenkins-pipeline";
+        final String action = "run_jenkins_pipeline";
 
         // we need to generate our resource value based on the subject
 
-        final String subject = claimsSet.getSubject();
+        final String resource = claimsSet.getSubject();
 
         // generate our principal object and carry out authorization check
-
-        final String resource = domainName + ":" + subject;
         Principal principal = SimplePrincipal.create(domainName, serviceName, (String) null);
+        
         boolean accessCheck = authorizer.access(action, resource, principal, null);
         if (!accessCheck) {
             errMsg.append("authorization check failed for action: ").append(action)
