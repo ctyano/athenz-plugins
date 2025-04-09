@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <name>athenz-plugins</name>
-  <description>Core Auth Interfaces</description>
+  <description>Athenz Plugin Implementations</description>
   <groupId>io.athenz</groupId>
   <artifactId>athenz-plugins</artifactId>
   <version>0.0.0</version>
