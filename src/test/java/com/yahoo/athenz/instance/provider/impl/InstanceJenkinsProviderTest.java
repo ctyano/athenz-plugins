@@ -119,7 +119,7 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("run_jenkins_pipeline", "https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenins.build", "https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(true);
         provider.setAuthorizer(authorizer);
 
@@ -156,7 +156,7 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("run_jenkins_pipeline", "https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenins.build", "https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(true);
         provider.setAuthorizer(authorizer);
 
