@@ -119,7 +119,7 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("jenins.build", "https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenkins.build", "https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(true);
         provider.setAuthorizer(authorizer);
 
@@ -156,7 +156,7 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("jenins.build", "https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenkins.build", "https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(true);
         provider.setAuthorizer(authorizer);
 
@@ -197,7 +197,7 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenkins.build", "sports:https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(true);
         provider.setAuthorizer(authorizer);
 
@@ -484,7 +484,7 @@ public class InstanceJenkinsProviderTest {
 
         Authorizer authorizer = Mockito.mock(Authorizer.class);
         Principal principal = SimplePrincipal.create("sports", "api", (String) null);
-        Mockito.when(authorizer.access("jenkins-pipeline", "sports:https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
+        Mockito.when(authorizer.access("jenkins.build", "sports:https://jenkins.athenz.svc.cluster.local/job/test-project/1", principal, null))
                 .thenReturn(false);
         provider.setAuthorizer(authorizer);
 
