@@ -90,10 +90,10 @@ public class InstanceJenkinsProvider implements InstanceProvider {
         // initialize our jwt processor
 
         jenkinsIssuer = System.getProperty(JENKINS_PROP_ISSUER, JENKINS_ISSUER);
-        jwtProcessor = JwtsHelper.getJWTProcessor(new JwtsSigningKeyResolver(extractjenkinsIssuerJwksUri(jenkinsIssuer), null));
+        jwtProcessor = JwtsHelper.getJWTProcessor(new JwtsSigningKeyResolver(extractJenkinsIssuerJwksUri(jenkinsIssuer), null));
     }
 
-    String extractjenkinsIssuerJwksUri(final String issuer) {
+    String extractJenkinsIssuerJwksUri(final String issuer) {
 
         // if we have the value configured then that's what we're going to use
 
@@ -196,9 +196,9 @@ public class InstanceJenkinsProvider implements InstanceProvider {
     @Override
     public InstanceConfirmation refreshInstance(InstanceConfirmation confirmation) throws ProviderResourceException {
 
-        // we do not allow refresh of GitHub actions certificates
+        // we do not allow refresh of Jenkins certificates
 
-        throw forbiddenError("GitHub Action X.509 Certificates cannot be refreshed");
+        throw forbiddenError("Jenkins X.509 Certificates cannot be refreshed");
     }
 
     /**
