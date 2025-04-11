@@ -305,7 +305,7 @@ public class InstanceJenkinsProvider implements InstanceProvider {
 
         // we need to extract and generate our action value for the authz check
 
-        final String action = "jenins.build";
+        final String action = "jenkins.build";
 
         // we need to generate our resource value based on the subject
 
