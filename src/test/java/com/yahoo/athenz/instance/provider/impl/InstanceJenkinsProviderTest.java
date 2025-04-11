@@ -350,7 +350,7 @@ public class InstanceJenkinsProviderTest {
             fail();
         } catch (ProviderResourceException ex) {
             assertEquals(ex.getCode(), 403);
-            assertTrue(ex.getMessage().contains("GitHub Action X.509 Certificates cannot be refreshed"));
+            assertTrue(ex.getMessage().contains("Jenkins X.509 Certificates cannot be refreshed"));
         }
     }
 
