@@ -23,6 +23,7 @@ env:
     VERSION=0.0.0
     ATHENZ_VERSION=
     JAVA_VERSION=11
+  TRACKING_GIT_REPO: AthenZ/athenz
 
 jobs:
   build:
@@ -84,8 +85,8 @@ jobs:
             ATHENZ_PACKAGE_VERSION="$(git tag --points-at HEAD | sed -e 's/.*v\([0-9]*.[0-9]*.[0-9]*\).*/\1/g')"
             ATHENZ_TAG_VERSION="$(git tag --points-at HEAD | sed -e 's/.*\(v[0-9]*.[0-9]*.[0-9]*\).*/\1/g')"
           else
-            ATHENZ_PACKAGE_VERSION="$(curl -s https://api.github.com/repos/AthenZ/athenz/tags | jq -r .[].name | sed -e 's/.*v\([0-9]*.[0-9]*.[0-9]*\).*/\1/g' | head -n1)"
-            ATHENZ_TAG_VERSION="$(curl -s https://api.github.com/repos/AthenZ/athenz/tags | jq -r .[].name | sed -e 's/.*\(v[0-9]*.[0-9]*.[0-9]*\).*/\1/g' | head -n1)"
+            ATHENZ_PACKAGE_VERSION="$(curl -s https://api.github.com/repos/${{ env.TRACKING_GIT_REPO }}/tags | jq -r .[].name | sed -e 's/.*v\([0-9]*.[0-9]*.[0-9]*\).*/\1/g' | head -n1)"
+            ATHENZ_TAG_VERSION="$(curl -s https://api.github.com/repos/${{ env.TRACKING_GIT_REPO }}/tags | jq -r .[].name | sed -e 's/.*\(v[0-9]*.[0-9]*.[0-9]*\).*/\1/g' | head -n1)"
           fi
 
           # here we can place the command that will generate multi-line text
