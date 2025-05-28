@@ -18,7 +18,7 @@ env:
   # DOCKER_REGISTRY_OWNER: ${{ env.CI_REPOSITORY_OWNER }}
   # DOCKER_REGISTRY_IMAGE: ${{ env.CI_REPOSITORY_NAME }}
   # DOCKER_REGISTRY_TOKEN: ${{ secrets.DOCKER_REGISTRY_TOKEN }}
-  DOCKER_TAEGET_PLATFORMS: linux/amd64,linux/arm64
+  DOCKER_TAEGET_PLATFORMS: linux/amd64
   # DOCKER_BUILD_ARGS: |
   SOURCE_IMAGES: athenz-plugins
   TARGET_FILE_DIRECTORY: target
@@ -145,12 +145,17 @@ jobs:
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/$tag" \
             | jq '.id')
-          for file in athenz-plugins_amd64/$TARGET_FILE_DIRECTORY/$(echo ${{ env.TARGET_FILE_EXTENTIONS }} | sed -e 's/\([^,]*\)/\*.\1/g' | tr "," "\n"); do
-            curl \
-              -XPOST \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
-              -H "Content-Type: $(file --mime-type -b $file)" \
-              --data-binary @$file \
-              "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets?name=$(basename $file)"
+          for image in $(echo ${{ env.SOURCE_IMAGES }} | tr "," "\n"); do
+            for platform in $(echo ${{ env.DOCKER_TAEGET_PLATFORMS }} | tr "," "\n"); do
+              arch=$(echo $platform | sed -e 's/\([^/]*\)\/\([^/]*\).*/\2/g')
+              for file in ${image}_${arch}/$TARGET_FILE_DIRECTORY/$(echo ${{ env.TARGET_FILE_EXTENTIONS }} | sed -e 's/\([^,]*\)/\*.\1/g' | tr "," "\n"); do
+                curl \
+                  -XPOST \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "Authorization: Bearer $GITHUB_TOKEN" \
+                  -H "Content-Type: $(file --mime-type -b $file)" \
+                  --data-binary @$file \
+                  "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id/assets?name=$(basename $file)"
+              done
+            done
           done
