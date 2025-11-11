@@ -5,7 +5,8 @@
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
+  - package-ecosystem: "maven" # See documentation for possible values
+    # Look for a `pom.xml` in the `root` directory
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
