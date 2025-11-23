@@ -23,7 +23,7 @@ COPY . .
 
 RUN curl -s https://webi.sh/yq | sh && $HOME/.local/bin/yq -v
 
-RUN cat pom.xml.template \
+RUN cat template/pom.xml \
       | $HOME/.local/bin/yq -p xml -o xml ".project.version=strenv(VERSION)" \
       | $HOME/.local/bin/yq -p xml -o xml ".project.properties.\"athenz.version\"=strenv(ATHENZ_VERSION)" \
       | $HOME/.local/bin/yq -p xml -o xml ".project.properties.\"java.version\"=strenv(JAVA_VERSION)" \

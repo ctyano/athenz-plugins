@@ -4,9 +4,28 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
-updates:
-  - package-ecosystem: "maven" # See documentation for possible values
-    # Look for a `pom.xml` in the `root` directory
-    directory: "/" # Location of package manifests
+
+multi-ecosystem-groups:
+  docker-images:
     schedule:
       interval: "weekly"
+  github-actions:
+    schedule:
+      interval: "weekly"
+  maven:
+    schedule:
+      interval: "weekly"
+
+updates:
+  - package-ecosystem: "github-actions" # See documentation for possible values
+    directory: "/.github/workflows"
+    patterns: ["*"]
+    multi-ecosystem-group: github-actions
+  - package-ecosystem: "docker" # See documentation for possible values
+    directory: "/"
+    patterns: ["*"]
+    multi-ecosystem-group: docker-images
+  - package-ecosystem: "maven" # See documentation for possible values
+    directory: "/template"
+    patterns: ["*"]
+    multi-ecosystem-group: maven
