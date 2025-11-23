@@ -1,4 +1,4 @@
-FROM docker.io/library/maven:3-eclipse-temurin-17-focal as builder
+FROM docker.io/library/maven:3-eclipse-temurin-19-focal as builder
 
 ARG VERSION=
 ARG ATHENZ_VERSION=
@@ -33,7 +33,7 @@ ENV MAVEN_CONFIG "$HOME/.m2"
 
 RUN mvn -B package --file pom.xml
 
-FROM docker.io/library/openjdk:22-rc-slim-bookworm
+FROM docker.io/library/openjdk:25-rc-slim-bookworm
 
 ARG VERSION
 
