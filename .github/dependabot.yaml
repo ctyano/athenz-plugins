@@ -9,23 +9,23 @@ multi-ecosystem-groups:
   docker-images:
     schedule:
       interval: "weekly"
-  maven:
+  github-actions:
     schedule:
       interval: "weekly"
-  github-actions:
+  maven:
     schedule:
       interval: "weekly"
 
 updates:
+  - package-ecosystem: "github-actions" # See documentation for possible values
+    directory: "/.github/workflows"
+    patterns: ["*"]
+    multi-ecosystem-group: github-actions
   - package-ecosystem: "docker" # See documentation for possible values
     directory: "/"
     patterns: ["*"]
     multi-ecosystem-group: docker-images
   - package-ecosystem: "maven" # See documentation for possible values
-    directory: "/"
+    directory: "/template"
     patterns: ["*"]
     multi-ecosystem-group: maven
-  - package-ecosystem: "github-actions" # See documentation for possible values
-    directory: "/.github/workflows"
-    patterns: ["*"]
-    multi-ecosystem-group: github-actions
