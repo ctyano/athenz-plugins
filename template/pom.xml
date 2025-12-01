@@ -13,7 +13,7 @@
   <properties>
     <java.version>0</java.version>
     <!-- https://mvnrepository.com/artifact/com.yahoo.athenz/athenz-auth-core -->
-    <athenz.version>1.12.29</athenz.version>
+    <athenz.version>1.12.30</athenz.version>
     
     <maven.compiler.target>${java.version}</maven.compiler.target>
     <maven.compiler.source>${java.version}</maven.compiler.source>
@@ -44,7 +44,7 @@
     <maven-surefire-plugin.version>3.0.0-M6</maven-surefire-plugin.version>
     <maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.2.0</maven-javadoc-plugin.version>
-    <maven-assembly-plugin.version>3.7.1</maven-assembly-plugin.version>
+    <maven-assembly-plugin.version>3.8.0</maven-assembly-plugin.version>
     <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
     <exec-maven-plugin.version>1.1.1</exec-maven-plugin.version>
     <jacoco-maven-plugin.version>0.8.5</jacoco-maven-plugin.version>
