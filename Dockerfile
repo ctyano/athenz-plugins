@@ -29,7 +29,7 @@ RUN cat template/pom.xml \
       | $HOME/.local/bin/yq -p xml -o xml ".project.properties.\"java.version\"=strenv(JAVA_VERSION)" \
       | tee pom.xml
 
-ENV MAVEN_CONFIG="$HOME/.m2"
+ENV MAVEN_CONFIG=$HOME/.m2
 
 RUN mvn -B package --file pom.xml
 
@@ -39,6 +39,6 @@ ARG VERSION
 
 COPY --from=builder /target/athenz-plugins-$VERSION.jar /target/athenz-plugins-$VERSION.jar
 
-ENV JAR_DESTINATION="/"
+ENV JAR_DESTINATION=/
 
 ENTRYPOINT ["/bin/sh", "-c", "cp -p /target/athenz-plugins-*.jar ${JAR_DESTINATION}/athenz-plugins.jar"]
