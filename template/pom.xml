@@ -27,10 +27,10 @@
     <jackson-databind.version>2.20.1</jackson-databind.version>
     <rdl.version>1.5.4</rdl.version>
     <bouncycastle.version>1.83</bouncycastle.version>
-    <springframework.security.version>7.0.0</springframework.security.version>
+    <springframework.security.version>7.0.2</springframework.security.version>
     <guava.version>33.5.0-jre</guava.version>
     <slf4j.version>2.0.17</slf4j.version>
-    <logback.version>1.5.22</logback.version>
+    <logback.version>1.5.23</logback.version>
     <javax.version>4.0.1</javax.version>
     <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
     <mockito.version>5.2.0</mockito.version>
