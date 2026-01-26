@@ -13,7 +13,7 @@
   <properties>
     <java.version>0</java.version>
     <!-- https://mvnrepository.com/artifact/com.yahoo.athenz/athenz-auth-core -->
-    <athenz.version>1.12.31</athenz.version>
+    <athenz.version>1.12.33</athenz.version>
     
     <maven.compiler.target>${java.version}</maven.compiler.target>
     <maven.compiler.source>${java.version}</maven.compiler.source>
@@ -24,13 +24,13 @@
     <jetty.version>12.1.5</jetty.version>
     <jersey.version>2.35</jersey.version>
     <jackson.version>2.13.2</jackson.version>
-    <jackson-databind.version>2.20.1</jackson-databind.version>
+    <jackson-databind.version>2.21.0</jackson-databind.version>
     <rdl.version>1.5.4</rdl.version>
     <bouncycastle.version>1.83</bouncycastle.version>
     <springframework.security.version>7.0.2</springframework.security.version>
     <guava.version>33.5.0-jre</guava.version>
     <slf4j.version>2.0.17</slf4j.version>
-    <logback.version>1.5.23</logback.version>
+    <logback.version>1.5.26</logback.version>
     <javax.version>4.0.1</javax.version>
     <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
     <mockito.version>5.2.0</mockito.version>
@@ -83,7 +83,7 @@
     <dependency>
       <groupId>org.testng</groupId>
       <artifactId>testng</artifactId>
-      <version>7.11.0</version>
+      <version>7.12.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>
