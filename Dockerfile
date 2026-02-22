@@ -33,7 +33,7 @@ ENV MAVEN_CONFIG=$HOME/.m2
 
 RUN mvn -B package --file pom.xml
 
-FROM docker.io/library/openjdk:25-rc-slim-bookworm
+FROM docker.io/library/openjdk:26-rc-slim-bookworm
 
 ARG VERSION
 
