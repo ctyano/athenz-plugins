@@ -67,6 +67,7 @@ public class OIDCJwtAuthorityTest {
         final String issuer = "file://" + oidcIssuerDir.getCanonicalPath();
         createOpenIdConfigFile(new File(oidcIssuerDir, ".well-known/openid-configuration"),
                 new File("./src/test/resources/jwt_jwks.json"));
+        System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_ISSUER, issuer);
         System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_AUDIENCE, "https://athenz.io");
         System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_CLAIM, "repository");
 
@@ -87,6 +88,8 @@ public class OIDCJwtAuthorityTest {
             assertEquals(principal.getDomain(), "user");
             assertEquals(principal.getName(), "athenz/demo");
             assertEquals(errMsg.toString(), "");
+            Mockito.verify(mockedHelpers.constructed().get(0))
+                    .extractJwksUri(issuer + "/.well-known/openid-configuration", null);
         }
     }
 
@@ -121,21 +124,45 @@ public class OIDCJwtAuthorityTest {
     }
 
     @Test
-    public void testAuthenticateIssuerMismatch() throws JOSEException {
+    public void testAuthenticateCachesJwtProcessor() throws JOSEException {
         final String jwksUri = Objects.requireNonNull(getClass().getClassLoader().getResource("jwt_jwks.json")).toString();
         System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_JWKS_URI, jwksUri);
         System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_AUDIENCE, "https://athenz.io");
+        System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_CLAIM, "repository");
 
-        OIDCJwtAuthority authority = new OIDCJwtAuthority();
-        authority.initialize();
+        try (MockedConstruction<JwtsSigningKeyResolver> mockedResolvers = mockSigningKeyResolverConstruction()) {
+            OIDCJwtAuthority authority = new OIDCJwtAuthority();
+            authority.initialize();
 
-        String token = "Bearer " + generateIdToken("https://example.com/issuer",
-                System.currentTimeMillis() / 1000, "athenz", "athenz/demo", false, false);
+            String token = "Bearer " + generateIdToken("https://athenz-zts-server.athenz:4443/zts/v1",
+                    System.currentTimeMillis() / 1000, "athenz", "athenz/demo", false, false);
 
-        StringBuilder errMsg = new StringBuilder();
-        Principal principal = authority.authenticate(token, "127.0.0.1", "GET", errMsg);
-        assertNull(principal);
-        assertTrue(errMsg.toString().contains("token issuer is not the configured issuer"));
+            assertNotNull(authority.authenticate(token, "127.0.0.1", "GET", new StringBuilder()));
+            assertNotNull(authority.authenticate(token, "127.0.0.1", "GET", new StringBuilder()));
+            assertEquals(mockedResolvers.constructed().size(), 1);
+        }
+    }
+
+    @Test
+    public void testAuthenticateIssuerMismatch() throws JOSEException {
+        System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_AUDIENCE, "https://athenz.io");
+
+        try (MockedConstruction<JwtsHelper> mockedHelpers = Mockito.mockConstruction(JwtsHelper.class);
+             MockedConstruction<JwtsSigningKeyResolver> mockedResolvers = mockSigningKeyResolverConstruction()) {
+            OIDCJwtAuthority authority = new OIDCJwtAuthority();
+            authority.initialize();
+
+            String token = "Bearer " + generateIdToken("https://example.com/issuer",
+                    System.currentTimeMillis() / 1000, "athenz", "athenz/demo", false, false);
+
+            StringBuilder errMsg = new StringBuilder();
+            Principal principal = authority.authenticate(token, "127.0.0.1", "GET", errMsg);
+            assertNull(principal);
+            assertTrue(errMsg.toString().contains("token issuer is not the configured issuer"));
+            assertEquals(mockedResolvers.constructed().size(), 0);
+            assertEquals(mockedHelpers.constructed().size(), 1);
+            Mockito.verifyNoMoreInteractions(mockedHelpers.constructed().get(0));
+        }
     }
 
     @Test
@@ -168,6 +195,18 @@ public class OIDCJwtAuthorityTest {
         Principal principal = authority.authenticate("abc", "127.0.0.1", "GET", errMsg);
         assertNull(principal);
         assertEquals(errMsg.toString(), "OIDCJwtAuthority:authenticate: credentials do not start with Bearer");
+    }
+
+    @Test
+    public void testInitializeWithInvalidBootTimeOffset() {
+        System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_BOOT_TIME_OFFSET, "abc");
+        System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT, "X-Auth");
+
+        OIDCJwtAuthority authority = new OIDCJwtAuthority();
+        authority.initialize();
+
+        assertEquals(authority.bootTimeOffsetSeconds, OIDCJwtAuthority.DEFAULT_BOOT_TIME_OFFSET_SECONDS);
+        assertEquals(authority.getHeader(), "X-Auth");
     }
 
     private String generateIdToken(final String issuer, long currentTimeSecs, String enterprise,
