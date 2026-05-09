@@ -1,0 +1,213 @@
+package com.yahoo.athenz.auth.impl;
+
+import com.nimbusds.jose.proc.SecurityContext;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
+import com.yahoo.athenz.auth.Authority;
+import com.yahoo.athenz.auth.Principal;
+import com.yahoo.athenz.auth.token.jwts.JwtsHelper;
+import com.yahoo.athenz.auth.token.jwts.JwtsSigningKeyResolver;
+import org.eclipse.jetty.util.StringUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.text.ParseException;
+import java.util.Date;
+import java.util.concurrent.TimeUnit;
+
+public class OIDCJwtAuthority implements Authority {
+
+    private static final Logger LOG = LoggerFactory.getLogger(OIDCJwtAuthority.class);
+
+    public static final String OIDC_JWT_DEFAULT = "Authorization";
+    public static final String ATHENZ_PROP_OIDC_JWT = "athenz.auth.principal.auth.header.jwt";
+    public static final String ATHENZ_PROP_OIDC_JWT_DOMAIN = "athenz.auth.principal.auth.header.jwt.domain";
+    public static final String ATHENZ_PROP_OIDC_JWT_BOOT_TIME_OFFSET = "athenz.auth.principal.auth.header.jwt.boot_time_offset";
+    public static final String ATHENZ_PROP_OIDC_JWT_AUDIENCE = "athenz.auth.principal.auth.header.jwt.audience";
+    public static final String ATHENZ_PROP_OIDC_JWT_ISSUER = "athenz.auth.principal.auth.header.jwt.issuer";
+    public static final String ATHENZ_PROP_OIDC_JWT_JWKS_URI = "athenz.auth.principal.auth.header.jwt.jwks_uri";
+    public static final String ATHENZ_PROP_OIDC_JWT_CLAIM = "athenz.auth.principal.auth.header.jwt.claim";
+
+    static final String AUTH_DOMAIN_DEFAULT = "user";
+    static final String ISSUER = "https://athenz-zts-server.athenz:4443/zts/v1";
+    static final String AUDIENCE = "athenz";
+    static final String ISSUER_JWKS_URI = "https://token.actions.githubusercontent.com/.well-known/jwks";
+    static final String CLAIM_ENTERPRISE = "enterprise";
+    static final String CLAIM_SUB = "sub";
+    static final String BEARER_PREFIX = "Bearer ";
+
+    String principalDomain = AUTH_DOMAIN_DEFAULT;
+    String jwtIssuer = ISSUER;
+    String audience = "athenz.io";
+    String principalClaim = CLAIM_SUB;
+    long bootTimeOffsetSeconds = TimeUnit.SECONDS.convert(5, TimeUnit.MINUTES);
+
+    @Override
+    public void initialize() {
+        principalDomain = System.getProperty(ATHENZ_PROP_OIDC_JWT_DOMAIN, AUTH_DOMAIN_DEFAULT);
+        jwtIssuer = System.getProperty(ATHENZ_PROP_OIDC_JWT_ISSUER, ISSUER);
+        audience = System.getProperty(ATHENZ_PROP_OIDC_JWT_AUDIENCE, AUDIENCE);
+        principalClaim = System.getProperty(ATHENZ_PROP_OIDC_JWT_CLAIM, CLAIM_SUB);
+        bootTimeOffsetSeconds = Long.parseLong(System.getProperty(ATHENZ_PROP_OIDC_JWT_BOOT_TIME_OFFSET,
+                Long.toString(TimeUnit.SECONDS.convert(5, TimeUnit.MINUTES))));
+    }
+
+    @Override
+    public String getID() {
+        return "Jwt";
+    }
+
+    @Override
+    public String getDomain() {
+        return principalDomain;
+    }
+
+    @Override
+    public String getHeader() {
+        return System.getProperty(ATHENZ_PROP_OIDC_JWT, OIDC_JWT_DEFAULT);
+    }
+
+    @Override
+    public String getAuthenticateChallenge() {
+        return "Bearer realm=\"athenz\"";
+    }
+
+    @Override
+    public Principal authenticate(String creds, String remoteAddr, String httpMethod, StringBuilder errMsg) {
+        errMsg = errMsg == null ? new StringBuilder(512) : errMsg;
+
+        if (creds == null || !creds.startsWith(BEARER_PREFIX)) {
+            errMsg.append("OIDCJwtAuthority:authenticate: credentials do not start with Bearer");
+            return null;
+        }
+
+        final String token = creds.substring(BEARER_PREFIX.length());
+        if (token.isEmpty()) {
+            errMsg.append("OIDCJwtAuthority:authenticate: token is empty");
+            return null;
+        }
+
+        final String tokenIssuer = extractIssuer(token, errMsg);
+        if (tokenIssuer == null) {
+            return null;
+        }
+
+        final boolean[] fallbackUsed = new boolean[1];
+        final ConfigurableJWTProcessor<SecurityContext> jwtProcessor = buildJwtProcessor(tokenIssuer, fallbackUsed, errMsg);
+        if (jwtProcessor == null) {
+            return null;
+        }
+
+        JWTClaimsSet claimsSet;
+        try {
+            claimsSet = jwtProcessor.process(token, null);
+        } catch (Exception ex) {
+            errMsg.append("Unable to parse and validate token: ").append(ex.getMessage());
+            return null;
+        }
+
+        if (fallbackUsed[0] && !jwtIssuer.equals(claimsSet.getIssuer())) {
+            errMsg.append("token issuer is not the configured issuer: ").append(claimsSet.getIssuer());
+            return null;
+        }
+
+        if (!audience.equals(JwtsHelper.getAudience(claimsSet))) {
+            errMsg.append("token audience is not ZTS Server audience: ").append(JwtsHelper.getAudience(claimsSet));
+            return null;
+        }
+
+        Date issueDate = claimsSet.getIssueTime();
+        if (issueDate == null || issueDate.getTime() < System.currentTimeMillis() -
+                TimeUnit.SECONDS.toMillis(bootTimeOffsetSeconds)) {
+            errMsg.append("job start time is not recent enough, issued at: ").append(issueDate);
+            return null;
+        }
+
+        final String principalName = extractPrincipalName(claimsSet, errMsg);
+        if (principalName == null) {
+            return null;
+        }
+
+        SimplePrincipal principal = getSimplePrincipal(principalName.toLowerCase(), creds, issueDate.getTime() / 1000);
+        if (principal == null) {
+            errMsg.append("OIDCJwtAuthority:authenticate: failed to create principal: claim=")
+                    .append(principalClaim).append(" value=").append(principalName);
+            LOG.error(errMsg.toString());
+            return null;
+        }
+        principal.setUnsignedCreds(creds);
+        return principal;
+    }
+
+    String extractIssuer(final String token, StringBuilder errMsg) {
+        try {
+            SignedJWT signedJWT = SignedJWT.parse(token);
+            final String issuer = signedJWT.getJWTClaimsSet().getIssuer();
+            if (StringUtil.isEmpty(issuer)) {
+                errMsg.append("token does not contain required iss claim");
+                return null;
+            }
+            return issuer;
+        } catch (ParseException ex) {
+            errMsg.append("Unable to parse token: ").append(ex.getMessage());
+            return null;
+        }
+    }
+
+    ConfigurableJWTProcessor<SecurityContext> buildJwtProcessor(final String tokenIssuer, final boolean[] fallbackUsed,
+            StringBuilder errMsg) {
+
+        String jwksUri = extractIssuerJwksUri(tokenIssuer);
+        if (!StringUtil.isEmpty(jwksUri)) {
+            fallbackUsed[0] = false;
+            return JwtsHelper.getJWTProcessor(new JwtsSigningKeyResolver(jwksUri, null));
+        }
+
+        jwksUri = extractFallbackJwksUri();
+        if (StringUtil.isEmpty(jwksUri)) {
+            errMsg.append("JWT Processor not initialized");
+            return null;
+        }
+        fallbackUsed[0] = true;
+        return JwtsHelper.getJWTProcessor(new JwtsSigningKeyResolver(jwksUri, null));
+    }
+
+    String extractIssuerJwksUri(final String issuer) {
+        final String openIdConfigUri = buildOpenIdConfigUri(issuer);
+        if (StringUtil.isEmpty(openIdConfigUri)) {
+            return null;
+        }
+        return new JwtsHelper().extractJwksUri(openIdConfigUri, null);
+    }
+
+    String buildOpenIdConfigUri(final String issuer) {
+        if (StringUtil.isEmpty(issuer)) {
+            return null;
+        }
+        return issuer + "/.well-known/openid-configuration";
+    }
+
+    String extractFallbackJwksUri() {
+        String jwksUri = System.getProperty(ATHENZ_PROP_OIDC_JWT_JWKS_URI);
+        if (!StringUtil.isEmpty(jwksUri)) {
+            return jwksUri;
+        }
+        jwksUri = extractIssuerJwksUri(jwtIssuer);
+        return StringUtil.isEmpty(jwksUri) ? ISSUER_JWKS_URI : jwksUri;
+    }
+
+    SimplePrincipal getSimplePrincipal(String name, String creds, long issueTime) {
+        return (SimplePrincipal) SimplePrincipal.create(getDomain(),
+                name, creds, issueTime, this);
+    }
+
+    String extractPrincipalName(final JWTClaimsSet claimsSet, StringBuilder errMsg) {
+        final String principalName = JwtsHelper.getStringClaim(claimsSet, principalClaim);
+        if (StringUtil.isEmpty(principalName)) {
+            errMsg.append("token does not contain required ").append(principalClaim).append(" claim");
+            return null;
+        }
+        return principalName;
+    }
+}
