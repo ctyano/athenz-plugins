@@ -32,8 +32,7 @@ public class OIDCJwtAuthority implements Authority {
     static final String AUTH_DOMAIN_DEFAULT = "user";
     static final String ISSUER = "https://athenz-zts-server.athenz:4443/zts/v1";
     static final String AUDIENCE = "athenz";
-    static final String ISSUER_JWKS_URI = "https://token.actions.githubusercontent.com/.well-known/jwks";
-    static final String CLAIM_ENTERPRISE = "enterprise";
+    static final String ISSUER_JWKS_URI = "https://athenz-zts-server.athenz:4443/zts/v1/.well-known/jwks";
     static final String CLAIM_SUB = "sub";
     static final String BEARER_PREFIX = "Bearer ";
     static final long DEFAULT_BOOT_TIME_OFFSET_SECONDS = TimeUnit.SECONDS.convert(5, TimeUnit.MINUTES);
@@ -124,7 +123,7 @@ public class OIDCJwtAuthority implements Authority {
         Date issueDate = claimsSet.getIssueTime();
         if (issueDate == null || issueDate.getTime() < System.currentTimeMillis() -
                 TimeUnit.SECONDS.toMillis(bootTimeOffsetSeconds)) {
-            errMsg.append("job start time is not recent enough, issued at: ").append(issueDate);
+            errMsg.append("token issue time is not recent enough, issued at: ").append(issueDate);
             return null;
         }
 
