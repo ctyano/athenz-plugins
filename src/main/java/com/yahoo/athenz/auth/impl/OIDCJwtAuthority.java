@@ -20,7 +20,6 @@ public class OIDCJwtAuthority implements Authority {
 
     private static final Logger LOG = LoggerFactory.getLogger(OIDCJwtAuthority.class);
 
-    public static final String OIDC_JWT_DEFAULT = "Authorization";
     public static final String ATHENZ_PROP_OIDC_JWT = "athenz.auth.principal.auth.oidc.jwt";
     public static final String ATHENZ_PROP_OIDC_JWT_DOMAIN = "athenz.auth.principal.auth.oidc.jwt.domain";
     public static final String ATHENZ_PROP_OIDC_JWT_BOOT_TIME_OFFSET = "athenz.auth.principal.auth.oidc.jwt.boot_time_offset";
@@ -29,30 +28,31 @@ public class OIDCJwtAuthority implements Authority {
     public static final String ATHENZ_PROP_OIDC_JWT_JWKS_URI = "athenz.auth.principal.auth.oidc.jwt.jwks_uri";
     public static final String ATHENZ_PROP_OIDC_JWT_CLAIM = "athenz.auth.principal.auth.oidc.jwt.claim";
 
+    static final String AUTH_HEADER_DEFAULT = "Authorization";
     static final String AUTH_DOMAIN_DEFAULT = "user";
-    static final String ISSUER = "https://athenz-zts-server.athenz:4443/zts/v1";
-    static final String AUDIENCE = "athenz";
-    static final String ISSUER_JWKS_URI = "https://athenz-zts-server.athenz:4443/zts/v1/.well-known/jwks";
-    static final String CLAIM_SUB = "sub";
+    static final String ISSUER_DEFAULT = "https://athenz-zts-server.athenz:4443/zts/v1";
+    static final String AUDIENCE_DEFAULT = "athenz";
+    static final String ISSUER_JWKS_URI_DEFAULT = "https://athenz-zts-server.athenz:4443/zts/v1/.well-known/jwks";
+    static final String CLAIM_SUB_DEFAULT = "sub";
     static final String BEARER_PREFIX = "Bearer ";
     static final long DEFAULT_BOOT_TIME_OFFSET_SECONDS = TimeUnit.SECONDS.convert(5, TimeUnit.MINUTES);
 
+    String headerName = AUTH_HEADER_DEFAULT;
     String principalDomain = AUTH_DOMAIN_DEFAULT;
-    String jwtIssuer = ISSUER;
-    String audience = AUDIENCE;
-    String principalClaim = CLAIM_SUB;
-    String headerName = OIDC_JWT_DEFAULT;
+    String jwtIssuer = ISSUER_DEFAULT;
+    String audience = AUDIENCE_DEFAULT;
+    String principalClaim = CLAIM_SUB_DEFAULT;
     long bootTimeOffsetSeconds = DEFAULT_BOOT_TIME_OFFSET_SECONDS;
     final JwtsHelper jwtsHelper = new JwtsHelper();
     volatile ConfigurableJWTProcessor<SecurityContext> jwtProcessor;
 
     @Override
     public void initialize() {
-        headerName = System.getProperty(ATHENZ_PROP_OIDC_JWT, OIDC_JWT_DEFAULT);
+        headerName = System.getProperty(ATHENZ_PROP_OIDC_JWT, AUTH_HEADER_DEFAULT);
         principalDomain = System.getProperty(ATHENZ_PROP_OIDC_JWT_DOMAIN, AUTH_DOMAIN_DEFAULT);
-        jwtIssuer = System.getProperty(ATHENZ_PROP_OIDC_JWT_ISSUER, ISSUER);
-        audience = System.getProperty(ATHENZ_PROP_OIDC_JWT_AUDIENCE, AUDIENCE);
-        principalClaim = System.getProperty(ATHENZ_PROP_OIDC_JWT_CLAIM, CLAIM_SUB);
+        jwtIssuer = System.getProperty(ATHENZ_PROP_OIDC_JWT_ISSUER, ISSUER_DEFAULT);
+        audience = System.getProperty(ATHENZ_PROP_OIDC_JWT_AUDIENCE, AUDIENCE_DEFAULT);
+        principalClaim = System.getProperty(ATHENZ_PROP_OIDC_JWT_CLAIM, CLAIM_SUB_DEFAULT);
         bootTimeOffsetSeconds = parseBootTimeOffsetSeconds(System.getProperty(ATHENZ_PROP_OIDC_JWT_BOOT_TIME_OFFSET));
         jwtProcessor = null;
     }
@@ -223,7 +223,7 @@ public class OIDCJwtAuthority implements Authority {
             return jwksUri;
         }
         jwksUri = extractIssuerJwksUri(jwtIssuer);
-        return StringUtil.isEmpty(jwksUri) ? ISSUER_JWKS_URI : jwksUri;
+        return StringUtil.isEmpty(jwksUri) ? ISSUER_JWKS_URI_DEFAULT : jwksUri;
     }
 
     SimplePrincipal getSimplePrincipal(String name, String creds, long issueTime) {
