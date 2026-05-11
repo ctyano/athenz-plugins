@@ -19,6 +19,12 @@ import java.util.concurrent.TimeUnit;
 public class OIDCJwtAuthority implements Authority {
 
     private static final Logger LOG = LoggerFactory.getLogger(OIDCJwtAuthority.class);
+    
+    /**
+     * @deprecated use AUTH_HEADER_DEFAULT
+     */
+    @Deprecated
+    public static final String OIDC_JWT_DEFAULT = "Authorization";
 
     public static final String ATHENZ_PROP_OIDC_JWT = "athenz.auth.principal.auth.oidc.jwt";
     public static final String ATHENZ_PROP_OIDC_JWT_DOMAIN = "athenz.auth.principal.auth.oidc.jwt.domain";

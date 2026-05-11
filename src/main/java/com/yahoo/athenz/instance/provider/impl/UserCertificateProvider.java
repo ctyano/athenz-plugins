@@ -64,7 +64,6 @@ public class UserCertificateProvider implements InstanceProvider {
     private int connectTimeout;
     private int readTimeout;
 
-    private final JwtsHelper jwtsHelper = new JwtsHelper();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private volatile ConfigurableJWTProcessor<SecurityContext> jwtProcessor;
     private CloseableHttpClient httpClient;
@@ -173,6 +172,12 @@ public class UserCertificateProvider implements InstanceProvider {
     }
 
     private String exchangeCodeForToken(String code, String codeVerifier) throws ProviderResourceException {
+        if (StringUtil.isEmpty(idpTokenEndpoint)) {
+            throw error("IDP Token Endpoint not configured", ProviderResourceException.INTERNAL_SERVER_ERROR);
+        }
+        if (StringUtil.isEmpty(idpClientId)) {
+            throw error("IDP Client ID not configured", ProviderResourceException.INTERNAL_SERVER_ERROR);
+        }
         HttpPost httpPost = new HttpPost(idpTokenEndpoint);
         List<NameValuePair> params = new ArrayList<>();
         params.add(new BasicNameValuePair("grant_type", "authorization_code"));
@@ -197,6 +202,10 @@ public class UserCertificateProvider implements InstanceProvider {
                 throw error("Token exchange failed", ProviderResourceException.FORBIDDEN);
             }
             JsonNode json = objectMapper.readTree(responseBody);
+            if (json == null || !json.has("access_token")) {
+                LOG.error("Token exchange response missing access_token: {}", responseBody);
+                throw error("Token exchange failed: missing access_token", ProviderResourceException.FORBIDDEN);
+            }
             return json.get("access_token").asText();
         } catch (IOException e) {
             LOG.error("Token exchange failed due to network error: {}", e.getMessage());
@@ -214,6 +223,9 @@ public class UserCertificateProvider implements InstanceProvider {
             JWTClaimsSet claimsSet = processor.process(token, null);
             
             // Validate Audience
+            if (StringUtil.isEmpty(idpAudience)) {
+                throw error("IDP Audience not configured", ProviderResourceException.INTERNAL_SERVER_ERROR);
+            }
             if (!idpAudience.equals(JwtsHelper.getAudience(claimsSet))) {
                 throw error("Invalid token audience", ProviderResourceException.FORBIDDEN);
             }
