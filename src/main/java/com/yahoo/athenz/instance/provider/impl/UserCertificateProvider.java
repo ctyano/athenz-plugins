@@ -291,16 +291,10 @@ public class UserCertificateProvider implements InstanceProvider {
         }
         for (String pair : query.split("&")) {
             int idx = pair.indexOf("=");
-        for (String pair : query.split("&")) {
-            int idx = pair.indexOf("=");
             if (idx > 0) {
-                try {
-                    String key = java.net.URLDecoder.decode(pair.substring(0, idx), StandardCharsets.UTF_8.name());
-                    String value = java.net.URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8.name());
-                    params.put(key, value);
-                } catch (java.io.UnsupportedEncodingException e) {
-                    LOG.warn("Failed to decode query parameter: {}", pair);
-                }
+                String key = URLDecoder.decode(pair.substring(0, idx), StandardCharsets.UTF_8);
+                String value = URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8);
+                params.put(key, value);
             }
         }
         return params;
