@@ -54,6 +54,8 @@ public class UserCertificateProvider implements InstanceProvider {
     private static final String DEFAULT_USER_NAME_CLAIM = "sub";
     private static final int DEFAULT_TIMEOUT_MS = (int) TimeUnit.MILLISECONDS.convert(5, TimeUnit.SECONDS);
 
+    private static final int HTTP_OK = 200;
+
     private String idpTokenEndpoint;
     private String idpJwksEndpoint;
     private String idpClientId;
@@ -74,8 +76,8 @@ public class UserCertificateProvider implements InstanceProvider {
     }
 
     @Override
-    public void initialize(String provider, String providerEndpoint, SSLContext sslContext, KeyStore keyStore) {
-        String idpConfigEndpoint = System.getProperty(USER_CERT_PROP_IDP_CONFIG_ENDPOINT);
+    public void initialize(final String provider, final String providerEndpoint, final SSLContext sslContext, final KeyStore keyStore) {
+        final String idpConfigEndpoint = System.getProperty(USER_CERT_PROP_IDP_CONFIG_ENDPOINT);
         idpTokenEndpoint = System.getProperty(USER_CERT_PROP_IDP_TOKEN_ENDPOINT);
         idpJwksEndpoint = System.getProperty(USER_CERT_PROP_IDP_JWKS_ENDPOINT);
 
@@ -103,23 +105,35 @@ public class UserCertificateProvider implements InstanceProvider {
         }
     }
 
-    private void loadConfigFromEndpoint(String configEndpoint) {
-        HttpGet httpGet = new HttpGet(configEndpoint);
+    private void loadConfigFromEndpoint(final String configEndpoint) {
+        final HttpGet httpGet;
+        try {
+            httpGet = new HttpGet(configEndpoint);
+        } catch (IllegalArgumentException e) {
+            LOG.error("Invalid OIDC configuration endpoint: {}", configEndpoint);
+            return;
+        }
         try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
-            int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode == 200) {
-                HttpEntity entity = response.getEntity();
+            final int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == HTTP_OK) {
+                final HttpEntity entity = response.getEntity();
                 if (entity == null) {
                     LOG.error("Failed to load OIDC configuration from {}: empty entity", configEndpoint);
                     return;
                 }
-                String configJson = EntityUtils.toString(entity, StandardCharsets.UTF_8);
-                JsonNode config = objectMapper.readTree(configJson);
+                final String configJson = EntityUtils.toString(entity, StandardCharsets.UTF_8);
+                final JsonNode config = objectMapper.readTree(configJson);
                 if (StringUtil.isEmpty(idpTokenEndpoint) && config.has("token_endpoint")) {
-                    idpTokenEndpoint = config.get("token_endpoint").asText();
+                    final JsonNode node = config.get("token_endpoint");
+                    if (node != null && !node.isNull()) {
+                        idpTokenEndpoint = node.asText();
+                    }
                 }
                 if (StringUtil.isEmpty(idpJwksEndpoint) && config.has("jwks_uri")) {
-                    idpJwksEndpoint = config.get("jwks_uri").asText();
+                    final JsonNode node = config.get("jwks_uri");
+                    if (node != null && !node.isNull()) {
+                        idpJwksEndpoint = node.asText();
+                    }
                 }
             } else {
                 LOG.error("Failed to load OIDC configuration from {}: status={}", configEndpoint, statusCode);
@@ -130,20 +144,20 @@ public class UserCertificateProvider implements InstanceProvider {
     }
 
     @Override
-    public void setAuthorizer(Authorizer authorizer) {
+    public void setAuthorizer(final Authorizer authorizer) {
         // Not used in this implementation as we rely on IdP for identity
     }
 
     @Override
-    public InstanceConfirmation confirmInstance(InstanceConfirmation confirmation) throws ProviderResourceException {
-        String attestationData = confirmation.getAttestationData();
+    public InstanceConfirmation confirmInstance(final InstanceConfirmation confirmation) throws ProviderResourceException {
+        final String attestationData = confirmation.getAttestationData();
         if (StringUtil.isEmpty(attestationData)) {
             throw error("Missing attestation data", ProviderResourceException.FORBIDDEN);
         }
 
-        Map<String, String> params = parseQueryString(attestationData);
-        String code = params.get("code");
-        String codeVerifier = params.get("code_verifier");
+        final Map<String, String> params = parseQueryString(attestationData);
+        final String code = params.get("code");
+        final String codeVerifier = params.get("code_verifier");
 
         if (StringUtil.isEmpty(code)) {
             throw error("Missing authorization code", ProviderResourceException.FORBIDDEN);
@@ -154,11 +168,11 @@ public class UserCertificateProvider implements InstanceProvider {
             throw error("Missing code_verifier for PKCE", ProviderResourceException.FORBIDDEN);
         }
 
-        String accessToken = exchangeCodeForToken(code, codeVerifier);
+        final String accessToken = exchangeCodeForToken(code, codeVerifier);
         validateToken(accessToken, confirmation.getDomain(), confirmation.getService());
 
         // For user certificates, we don't allow refresh and we set specific usage
-        Map<String, String> attributes = new HashMap<>();
+        final Map<String, String> attributes = new HashMap<>();
         attributes.put(ZTS_CERT_REFRESH, "false");
         attributes.put(ZTS_CERT_USAGE, ZTS_CERT_USAGE_CLIENT);
         confirmation.setAttributes(attributes);
@@ -167,19 +181,24 @@ public class UserCertificateProvider implements InstanceProvider {
     }
 
     @Override
-    public InstanceConfirmation refreshInstance(InstanceConfirmation confirmation) throws ProviderResourceException {
+    public InstanceConfirmation refreshInstance(final InstanceConfirmation confirmation) throws ProviderResourceException {
         throw error("User certificates cannot be refreshed", ProviderResourceException.FORBIDDEN);
     }
 
-    private String exchangeCodeForToken(String code, String codeVerifier) throws ProviderResourceException {
+    private String exchangeCodeForToken(final String code, final String codeVerifier) throws ProviderResourceException {
         if (StringUtil.isEmpty(idpTokenEndpoint)) {
             throw error("IDP Token Endpoint not configured", ProviderResourceException.INTERNAL_SERVER_ERROR);
         }
         if (StringUtil.isEmpty(idpClientId)) {
             throw error("IDP Client ID not configured", ProviderResourceException.INTERNAL_SERVER_ERROR);
         }
-        HttpPost httpPost = new HttpPost(idpTokenEndpoint);
-        List<NameValuePair> params = new ArrayList<>();
+        final HttpPost httpPost;
+        try {
+            httpPost = new HttpPost(idpTokenEndpoint);
+        } catch (IllegalArgumentException e) {
+            throw error("Invalid IDP Token Endpoint: " + idpTokenEndpoint, ProviderResourceException.INTERNAL_SERVER_ERROR);
+        }
+        final List<NameValuePair> params = new ArrayList<>();
         params.add(new BasicNameValuePair("grant_type", "authorization_code"));
         params.add(new BasicNameValuePair("code", code));
         params.add(new BasicNameValuePair("client_id", idpClientId));
@@ -194,22 +213,23 @@ public class UserCertificateProvider implements InstanceProvider {
         httpPost.setEntity(new UrlEncodedFormEntity(params, StandardCharsets.UTF_8));
 
         try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
-            int statusCode = response.getStatusLine().getStatusCode();
-            HttpEntity entity = response.getEntity();
-            String responseBody = entity != null ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : "";
-            if (statusCode != 200) {
+            final int statusCode = response.getStatusLine().getStatusCode();
+            final HttpEntity entity = response.getEntity();
+            final String responseBody = entity != null ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : "";
+            if (statusCode != HTTP_OK) {
                 LOG.error("Token exchange failed: status={}, body={}", statusCode, responseBody);
-                throw error("Token exchange failed", ProviderResourceException.FORBIDDEN);
+                throw new ProviderResourceException(ProviderResourceException.FORBIDDEN, "Token exchange failed");
             }
-            JsonNode json = objectMapper.readTree(responseBody);
-            if (json == null || !json.has("access_token")) {
-                LOG.error("Token exchange response missing access_token: {}", responseBody);
-                throw error("Token exchange failed: missing access_token", ProviderResourceException.FORBIDDEN);
+            final JsonNode json = objectMapper.readTree(responseBody);
+            final JsonNode accessTokenNode = json != null ? json.get("access_token") : null;
+            if (accessTokenNode == null || accessTokenNode.isNull() || StringUtil.isEmpty(accessTokenNode.asText())) {
+                LOG.error("Token exchange response missing or invalid access_token: {}", responseBody);
+                throw new ProviderResourceException(ProviderResourceException.FORBIDDEN, "Token exchange failed: missing access_token");
             }
-            return json.get("access_token").asText();
+            return accessTokenNode.asText();
         } catch (IOException e) {
             LOG.error("Token exchange failed due to network error: {}", e.getMessage());
-            throw error("Token exchange failed: " + e.getMessage(), ProviderResourceException.FORBIDDEN);
+            throw new ProviderResourceException(ProviderResourceException.FORBIDDEN, "Token exchange failed: " + e.getMessage());
         }
     }
 
@@ -226,7 +246,7 @@ public class UserCertificateProvider implements InstanceProvider {
             if (StringUtil.isEmpty(idpAudience)) {
                 throw error("IDP Audience not configured", ProviderResourceException.INTERNAL_SERVER_ERROR);
             }
-            if (!idpAudience.equals(JwtsHelper.getAudience(claimsSet))) {
+            if (!Objects.equals(idpAudience, JwtsHelper.getAudience(claimsSet))) {
                 throw error("Invalid token audience", ProviderResourceException.FORBIDDEN);
             }
 
