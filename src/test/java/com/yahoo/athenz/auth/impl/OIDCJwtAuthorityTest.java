@@ -124,6 +124,36 @@ public class OIDCJwtAuthorityTest {
     }
 
     @Test
+    public void testAuthenticateWithFallbackDerivedJwksUri() throws JOSEException {
+        final String issuer = "https://custom-issuer.athenz.io/v1";
+        System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_ISSUER, issuer);
+        System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_AUDIENCE, "https://athenz.io");
+        System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_CLAIM, "repository");
+        AtomicReference<String> constructedJwksUri = new AtomicReference<>();
+
+        try (MockedConstruction<JwtsHelper> mockedHelpers = Mockito.mockConstruction(JwtsHelper.class,
+                (mock, context) -> Mockito.when(mock.extractJwksUri(Mockito.anyString(), Mockito.isNull()))
+                        .thenReturn(null));
+             MockedConstruction<JwtsSigningKeyResolver> mockedResolvers =
+                     mockSigningKeyResolverConstruction(constructedJwksUri)) {
+
+            OIDCJwtAuthority authority = new OIDCJwtAuthority();
+            authority.initialize();
+
+            String token = "Bearer " + generateIdToken(issuer,
+                    System.currentTimeMillis() / 1000, "athenz", "athenz/demo", false, false);
+
+            StringBuilder errMsg = new StringBuilder();
+            Principal principal = authority.authenticate(token, "127.0.0.1", "GET", errMsg);
+            assertNotNull(principal);
+            assertEquals(principal.getName(), "athenz/demo");
+            assertEquals(errMsg.toString(), "");
+            assertEquals(mockedResolvers.constructed().size(), 1);
+            assertEquals(constructedJwksUri.get(), issuer + "/.well-known/jwks");
+        }
+    }
+
+    @Test
     public void testAuthenticateCachesJwtProcessor() throws JOSEException {
         final String jwksUri = Objects.requireNonNull(getClass().getClassLoader().getResource("jwt_jwks.json")).toString();
         System.setProperty(OIDCJwtAuthority.ATHENZ_PROP_OIDC_JWT_JWKS_URI, jwksUri);

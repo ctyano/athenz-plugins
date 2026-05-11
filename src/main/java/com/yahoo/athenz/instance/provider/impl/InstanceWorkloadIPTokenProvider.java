@@ -298,4 +298,8 @@ public class InstanceWorkloadIPTokenProvider implements InstanceProvider {
 
         return true;
     }
+
+    @Override
+    public void close() {
+    }
 }

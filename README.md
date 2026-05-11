@@ -35,3 +35,32 @@ cat template/pom.xml \
 
 https://github.com/ctyano/athenz-plugins/releases
 
+## Configuration
+
+### OIDCJwtAuthority
+
+| Property | Default | Description |
+| --- | --- | --- |
+| athenz.auth.principal.auth.oidc.jwt | Authorization | HTTP Header name for the OIDC JWT |
+| athenz.auth.principal.auth.oidc.jwt.domain | user | Athenz domain for the principal |
+| athenz.auth.principal.auth.oidc.jwt.issuer | https://athenz-zts-server.athenz:4443/zts/v1 | Expected issuer for the JWT |
+| athenz.auth.principal.auth.oidc.jwt.audience | athenz | Expected audience for the JWT |
+| athenz.auth.principal.auth.oidc.jwt.jwks_uri | (derived from issuer) | JWKS URI for the issuer |
+| athenz.auth.principal.auth.oidc.jwt.claim | sub | Claim name for the principal name |
+| athenz.auth.principal.auth.oidc.jwt.boot_time_offset | 300 | Boot time offset in seconds |
+
+### UserCertificateProvider
+
+| Property | Default | Description |
+| --- | --- | --- |
+| athenz.zts.user_cert.idp_config_endpoint | | OIDC discovery endpoint for the IdP |
+| athenz.zts.user_cert.idp_token_endpoint | | OIDC token endpoint for the IdP |
+| athenz.zts.user_cert.idp_jwks_endpoint | | OIDC JWKS endpoint for the IdP |
+| athenz.zts.user_cert.idp_client_id | | Client ID for the IdP |
+| athenz.zts.user_cert.idp_client_secret | | Client secret for the IdP (if not using PKCE) |
+| athenz.zts.user_cert.idp_audience | | Expected audience for the ID token |
+| athenz.zts.user_cert.idp_redirect_uri | http://localhost:9213/oauth2/callback | Redirect URI for the IdP |
+| athenz.zts.user_cert.user_name_claim | sub | Claim name for the user name |
+| athenz.zts.user_cert.connect_timeout | 5000 | Connection timeout in milliseconds |
+| athenz.zts.user_cert.read_timeout | 5000 | Read timeout in milliseconds |
+
