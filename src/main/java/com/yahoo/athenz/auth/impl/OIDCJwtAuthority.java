@@ -223,7 +223,7 @@ public class OIDCJwtAuthority implements Authority {
             return jwksUri;
         }
         jwksUri = extractIssuerJwksUri(jwtIssuer);
-        return StringUtil.isEmpty(jwksUri) ? ISSUER_JWKS_URI_DEFAULT : jwksUri;
+        return StringUtil.isEmpty(jwksUri) ? jwtIssuer + "/.well-known/jwks" : jwksUri;
     }
 
     SimplePrincipal getSimplePrincipal(String name, String creds, long issueTime) {

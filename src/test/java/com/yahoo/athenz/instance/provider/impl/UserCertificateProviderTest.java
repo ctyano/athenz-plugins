@@ -106,6 +106,7 @@ public class UserCertificateProviderTest {
             assertNotNull(result);
             assertEquals(result.getAttributes().get(UserCertificateProvider.ZTS_CERT_REFRESH), "false");
             assertEquals(result.getAttributes().get(UserCertificateProvider.ZTS_CERT_USAGE), "client");
+            provider.close();
         }
     }
 
@@ -120,6 +121,8 @@ public class UserCertificateProviderTest {
         } catch (ProviderResourceException e) {
             assertEquals(e.getCode(), ProviderResourceException.FORBIDDEN);
             assertTrue(e.getMessage().contains("Missing attestation data"));
+        } finally {
+            provider.close();
         }
     }
 
@@ -131,6 +134,8 @@ public class UserCertificateProviderTest {
             fail();
         } catch (ProviderResourceException e) {
             assertEquals(e.getCode(), ProviderResourceException.FORBIDDEN);
+        } finally {
+            provider.close();
         }
     }
 

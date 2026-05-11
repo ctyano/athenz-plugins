@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -110,7 +109,12 @@ public class UserCertificateProvider implements InstanceProvider {
         try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
             int statusCode = response.getStatusLine().getStatusCode();
             if (statusCode == 200) {
-                String configJson = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+                HttpEntity entity = response.getEntity();
+                if (entity == null) {
+                    LOG.error("Failed to load OIDC configuration from {}: empty entity", configEndpoint);
+                    return;
+                }
+                String configJson = EntityUtils.toString(entity, StandardCharsets.UTF_8);
                 JsonNode config = objectMapper.readTree(configJson);
                 if (StringUtil.isEmpty(idpTokenEndpoint) && config.has("token_endpoint")) {
                     idpTokenEndpoint = config.get("token_endpoint").asText();
@@ -186,7 +190,8 @@ public class UserCertificateProvider implements InstanceProvider {
 
         try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
             int statusCode = response.getStatusLine().getStatusCode();
-            String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+            HttpEntity entity = response.getEntity();
+            String responseBody = entity != null ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : "";
             if (statusCode != 200) {
                 LOG.error("Token exchange failed: status={}, body={}", statusCode, responseBody);
                 throw error("Token exchange failed", ProviderResourceException.FORBIDDEN);
@@ -255,16 +260,23 @@ public class UserCertificateProvider implements InstanceProvider {
         for (String pair : query.split("&")) {
             int idx = pair.indexOf("=");
             if (idx > 0) {
-                try {
-                    String key = URLDecoder.decode(pair.substring(0, idx), StandardCharsets.UTF_8.name());
-                    String value = URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8.name());
-                    params.put(key, value);
-                } catch (UnsupportedEncodingException e) {
-                    LOG.error("Failed to decode query string parameter: {}", e.getMessage());
-                }
+                String key = URLDecoder.decode(pair.substring(0, idx), StandardCharsets.UTF_8);
+                String value = URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8);
+                params.put(key, value);
             }
         }
         return params;
+    }
+
+    @Override
+    public void close() {
+        if (httpClient != null) {
+            try {
+                httpClient.close();
+            } catch (IOException e) {
+                LOG.error("Failed to close HTTP client: {}", e.getMessage());
+            }
+        }
     }
 
     private ProviderResourceException error(String message, int code) {
