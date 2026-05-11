@@ -32,7 +32,7 @@ public class OIDCJwtAuthority implements Authority {
     static final String AUTH_DOMAIN_DEFAULT = "user";
     static final String ISSUER_DEFAULT = "https://athenz-zts-server.athenz:4443/zts/v1";
     static final String AUDIENCE_DEFAULT = "athenz";
-    static final String ISSUER_JWKS_URI_DEFAULT = "https://athenz-zts-server.athenz:4443/zts/v1/.well-known/jwks";
+    static final String ISSUER_JWKS_URI_DEFAULT = ISSUER_DEFAULT + "/.well-known/jwks";
     static final String CLAIM_SUB_DEFAULT = "sub";
     static final String BEARER_PREFIX = "Bearer ";
     static final long DEFAULT_BOOT_TIME_OFFSET_SECONDS = TimeUnit.SECONDS.convert(5, TimeUnit.MINUTES);

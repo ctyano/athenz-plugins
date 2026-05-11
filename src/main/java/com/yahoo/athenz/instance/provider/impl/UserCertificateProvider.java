@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -79,10 +81,6 @@ public class UserCertificateProvider implements InstanceProvider {
         idpTokenEndpoint = System.getProperty(USER_CERT_PROP_IDP_TOKEN_ENDPOINT);
         idpJwksEndpoint = System.getProperty(USER_CERT_PROP_IDP_JWKS_ENDPOINT);
 
-        if (!StringUtil.isEmpty(idpConfigEndpoint)) {
-            loadConfigFromEndpoint(idpConfigEndpoint);
-        }
-
         idpClientId = System.getProperty(USER_CERT_PROP_IDP_CLIENT_ID);
         idpClientSecret = System.getProperty(USER_CERT_PROP_IDP_CLIENT_SECRET);
         idpAudience = System.getProperty(USER_CERT_PROP_IDP_AUDIENCE);
@@ -101,6 +99,10 @@ public class UserCertificateProvider implements InstanceProvider {
                 .setDefaultRequestConfig(requestConfig)
                 .setSSLContext(sslContext)
                 .build();
+
+        if (!StringUtil.isEmpty(idpConfigEndpoint)) {
+            loadConfigFromEndpoint(idpConfigEndpoint);
+        }
     }
 
     private void loadConfigFromEndpoint(String configEndpoint) {
@@ -108,7 +110,7 @@ public class UserCertificateProvider implements InstanceProvider {
         try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
             int statusCode = response.getStatusLine().getStatusCode();
             if (statusCode == 200) {
-                String configJson = EntityUtils.toString(response.getEntity());
+                String configJson = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
                 JsonNode config = objectMapper.readTree(configJson);
                 if (StringUtil.isEmpty(idpTokenEndpoint) && config.has("token_endpoint")) {
                     idpTokenEndpoint = config.get("token_endpoint").asText();
@@ -184,7 +186,7 @@ public class UserCertificateProvider implements InstanceProvider {
 
         try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
             int statusCode = response.getStatusLine().getStatusCode();
-            String responseBody = EntityUtils.toString(response.getEntity());
+            String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
             if (statusCode != 200) {
                 LOG.error("Token exchange failed: status={}, body={}", statusCode, responseBody);
                 throw error("Token exchange failed", ProviderResourceException.FORBIDDEN);
@@ -253,7 +255,13 @@ public class UserCertificateProvider implements InstanceProvider {
         for (String pair : query.split("&")) {
             int idx = pair.indexOf("=");
             if (idx > 0) {
-                params.put(pair.substring(0, idx), pair.substring(idx + 1));
+                try {
+                    String key = URLDecoder.decode(pair.substring(0, idx), StandardCharsets.UTF_8.name());
+                    String value = URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8.name());
+                    params.put(key, value);
+                } catch (UnsupportedEncodingException e) {
+                    LOG.error("Failed to decode query string parameter: {}", e.getMessage());
+                }
             }
         }
         return params;
