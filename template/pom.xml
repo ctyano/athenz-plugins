@@ -13,7 +13,7 @@
   <properties>
     <java.version>0</java.version>
     <!-- https://mvnrepository.com/artifact/com.yahoo.athenz/athenz-auth-core -->
-    <athenz.version>1.12.40</athenz.version>
+    <athenz.version>1.12.41</athenz.version>
     
     <maven.compiler.target>${java.version}</maven.compiler.target>
     <maven.compiler.source>${java.version}</maven.compiler.source>
@@ -29,7 +29,7 @@
     <bouncycastle.version>1.84</bouncycastle.version>
     <springframework.security.version>7.0.5</springframework.security.version>
     <guava.version>33.6.0-jre</guava.version>
-    <slf4j.version>2.0.17</slf4j.version>
+    <slf4j.version>2.0.18</slf4j.version>
     <logback.version>1.5.32</logback.version>
     <javax.version>4.0.1</javax.version>
     <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
