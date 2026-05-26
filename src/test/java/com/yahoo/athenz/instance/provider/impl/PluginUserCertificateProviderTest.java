@@ -43,32 +43,32 @@ import java.util.Map;
 
 import static org.testng.Assert.*;
 
-public class UserCertificateProviderTest {
+public class PluginUserCertificateProviderTest {
 
     private final File ecPrivateKey = new File("./src/test/resources/unit_test_ec_private.key");
 
     @BeforeMethod
     public void setup() {
-        System.clearProperty(UserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT);
-        System.clearProperty(UserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT);
-        System.clearProperty(UserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE);
-        System.clearProperty(UserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID);
     }
 
     @AfterMethod
     public void cleanup() {
-        System.clearProperty(UserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT);
-        System.clearProperty(UserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT);
-        System.clearProperty(UserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE);
-        System.clearProperty(UserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID);
     }
 
     @Test
     public void testConfirmInstanceSuccess() throws Exception {
-        System.setProperty(UserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT, "https://idp.com/token");
-        System.setProperty(UserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT, "https://idp.com/jwks");
-        System.setProperty(UserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE, "athenz");
-        System.setProperty(UserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID, "client-id");
+        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT, "https://idp.com/token");
+        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT, "https://idp.com/jwks");
+        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE, "athenz");
+        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID, "client-id");
 
         String accessToken = generateToken("athenz", "john");
         String responseBody = "{\"access_token\": \"" + accessToken + "\"}";
@@ -93,7 +93,7 @@ public class UserCertificateProviderTest {
             Mockito.when(mockBuilder.setSSLContext(Mockito.any())).thenReturn(mockBuilder);
             Mockito.when(mockBuilder.build()).thenReturn(mockHttpClient);
 
-            UserCertificateProvider provider = new UserCertificateProvider();
+            PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
             provider.initialize("provider", "endpoint", null, null);
 
             InstanceConfirmation confirmation = new InstanceConfirmation();
@@ -104,15 +104,15 @@ public class UserCertificateProviderTest {
             InstanceConfirmation result = provider.confirmInstance(confirmation);
 
             assertNotNull(result);
-            assertEquals(result.getAttributes().get(UserCertificateProvider.ZTS_CERT_REFRESH), "false");
-            assertEquals(result.getAttributes().get(UserCertificateProvider.ZTS_CERT_USAGE), "client");
+            assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_REFRESH), "false");
+            assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_USAGE), "client");
             provider.close();
         }
     }
 
     @Test
     public void testConfirmInstanceMissingAttestation() throws ProviderResourceException {
-        UserCertificateProvider provider = new UserCertificateProvider();
+        PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
         InstanceConfirmation confirmation = new InstanceConfirmation();
         
         try {
@@ -128,7 +128,7 @@ public class UserCertificateProviderTest {
 
     @Test
     public void testRefreshInstanceForbidden() throws ProviderResourceException {
-        UserCertificateProvider provider = new UserCertificateProvider();
+        PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
         try {
             provider.refreshInstance(new InstanceConfirmation());
             fail();
