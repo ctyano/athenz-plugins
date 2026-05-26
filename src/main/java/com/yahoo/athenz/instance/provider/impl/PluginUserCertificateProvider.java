@@ -35,9 +35,9 @@ import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-public class UserCertificateProvider implements InstanceProvider {
+public class PluginUserCertificateProvider implements InstanceProvider {
 
-    private static final Logger LOG = LoggerFactory.getLogger(UserCertificateProvider.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PluginUserCertificateProvider.class);
 
     public static final String USER_CERT_PROP_IDP_CONFIG_ENDPOINT = "athenz.zts.user_cert.idp_config_endpoint";
     public static final String USER_CERT_PROP_IDP_TOKEN_ENDPOINT  = "athenz.zts.user_cert.idp_token_endpoint";
