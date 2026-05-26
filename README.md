@@ -54,13 +54,10 @@ https://github.com/ctyano/athenz-plugins/releases
 | Property | Default | Description |
 | --- | --- | --- |
 | athenz.zts.user_cert.idp_config_endpoint | | OIDC discovery endpoint for the IdP |
-| athenz.zts.user_cert.idp_token_endpoint | | OIDC token endpoint for the IdP |
 | athenz.zts.user_cert.idp_jwks_endpoint | | OIDC JWKS endpoint for the IdP |
-| athenz.zts.user_cert.idp_client_id | | Client ID for the IdP |
-| athenz.zts.user_cert.idp_client_secret | | Client secret for the IdP (if not using PKCE) |
-| athenz.zts.user_cert.idp_audience | | Expected audience for the ID token |
-| athenz.zts.user_cert.idp_redirect_uri | http://localhost:9213/oauth2/callback | Redirect URI for the IdP |
+| athenz.zts.user_cert.idp_audience | | Expected audience for the JWT access token |
 | athenz.zts.user_cert.user_name_claim | sub | Claim name for the user name |
 | athenz.zts.user_cert.connect_timeout | 5000 | Connection timeout in milliseconds |
 | athenz.zts.user_cert.read_timeout | 5000 | Read timeout in milliseconds |
 
+The UserCertificateProvider expects the attestation data to contain the JWT access token issued by the IdP. It validates the token signature with the configured JWKS, checks the expected audience, and compares the configured user name claim with the requested Athenz principal.

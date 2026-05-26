@@ -7,39 +7,24 @@ import com.nimbusds.jose.crypto.ECDSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.JWSKeySelector;
+import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import com.yahoo.athenz.auth.token.jwts.JwtsHelper;
-import com.yahoo.athenz.auth.token.jwts.JwtsSigningKeyResolver;
+import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
+import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import com.yahoo.athenz.auth.util.Crypto;
 import com.yahoo.athenz.instance.provider.InstanceConfirmation;
 import com.yahoo.athenz.instance.provider.ProviderResourceException;
-import org.apache.http.HttpEntity;
-import org.apache.http.StatusLine;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.client.HttpClients;
-import org.mockito.MockedConstruction;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Field;
 import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
-import java.time.Instant;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.testng.Assert.*;
 
@@ -47,74 +32,33 @@ public class PluginUserCertificateProviderTest {
 
     private final File ecPrivateKey = new File("./src/test/resources/unit_test_ec_private.key");
 
-    @BeforeMethod
-    public void setup() {
-        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT);
-        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT);
-        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE);
-        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID);
-    }
-
-    @AfterMethod
-    public void cleanup() {
-        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT);
-        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT);
-        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE);
-        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID);
-    }
-
     @Test
     public void testConfirmInstanceSuccess() throws Exception {
-        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_TOKEN_ENDPOINT, "https://idp.com/token");
-        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT, "https://idp.com/jwks");
-        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE, "athenz");
-        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_CLIENT_ID, "client-id");
-
         String accessToken = generateToken("athenz", "john");
-        String responseBody = "{\"access_token\": \"" + accessToken + "\"}";
 
-        CloseableHttpClient mockHttpClient = Mockito.mock(CloseableHttpClient.class);
-        CloseableHttpResponse mockResponse = Mockito.mock(CloseableHttpResponse.class);
-        HttpEntity mockEntity = Mockito.mock(HttpEntity.class);
-        StatusLine mockStatusLine = Mockito.mock(StatusLine.class);
+        PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
+        setField(provider, "idpAudience", "athenz");
+        setField(provider, "userNameClaim", "sub");
+        setField(provider, "jwtProcessor", buildLocalJwtProcessor());
 
-        Mockito.when(mockStatusLine.getStatusCode()).thenReturn(200);
-        Mockito.when(mockResponse.getStatusLine()).thenReturn(mockStatusLine);
-        Mockito.when(mockEntity.getContent()).thenReturn(new ByteArrayInputStream(responseBody.getBytes(StandardCharsets.UTF_8)));
-        Mockito.when(mockResponse.getEntity()).thenReturn(mockEntity);
-        Mockito.when(mockHttpClient.execute(Mockito.any(HttpPost.class))).thenReturn(mockResponse);
+        InstanceConfirmation confirmation = new InstanceConfirmation();
+        confirmation.setDomain("user");
+        confirmation.setService("john");
+        confirmation.setAttestationData(accessToken);
 
-        try (MockedStatic<HttpClients> mockedHttpClients = Mockito.mockStatic(HttpClients.class);
-             MockedConstruction<JwtsSigningKeyResolver> mockedResolvers = mockSigningKeyResolverConstruction()) {
-            
-            HttpClientBuilder mockBuilder = Mockito.mock(HttpClientBuilder.class);
-            mockedHttpClients.when(HttpClients::custom).thenReturn(mockBuilder);
-            Mockito.when(mockBuilder.setDefaultRequestConfig(Mockito.any())).thenReturn(mockBuilder);
-            Mockito.when(mockBuilder.setSSLContext(Mockito.any())).thenReturn(mockBuilder);
-            Mockito.when(mockBuilder.build()).thenReturn(mockHttpClient);
+        InstanceConfirmation result = provider.confirmInstance(confirmation);
 
-            PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
-            provider.initialize("provider", "endpoint", null, null);
-
-            InstanceConfirmation confirmation = new InstanceConfirmation();
-            confirmation.setDomain("user");
-            confirmation.setService("john");
-            confirmation.setAttestationData("code=123&code_verifier=456");
-
-            InstanceConfirmation result = provider.confirmInstance(confirmation);
-
-            assertNotNull(result);
-            assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_REFRESH), "false");
-            assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_USAGE), "client");
-            provider.close();
-        }
+        assertNotNull(result);
+        assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_REFRESH), "false");
+        assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_USAGE), "client");
+        provider.close();
     }
 
     @Test
     public void testConfirmInstanceMissingAttestation() throws ProviderResourceException {
         PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
         InstanceConfirmation confirmation = new InstanceConfirmation();
-        
+
         try {
             provider.confirmInstance(confirmation);
             fail();
@@ -155,10 +99,11 @@ public class PluginUserCertificateProviderTest {
         return signedJWT.serialize();
     }
 
-    private MockedConstruction<JwtsSigningKeyResolver> mockSigningKeyResolverConstruction() {
-        return Mockito.mockConstruction(JwtsSigningKeyResolver.class, (mock, context) -> {
-            Mockito.when(mock.getKeySource()).thenReturn(loadLocalJwkSourceUnchecked());
-        });
+    private ConfigurableJWTProcessor<SecurityContext> buildLocalJwtProcessor() {
+        DefaultJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
+        JWSKeySelector<SecurityContext> keySelector = new JWSVerificationKeySelector<>(JWSAlgorithm.ES256, loadLocalJwkSourceUnchecked());
+        processor.setJWSKeySelector(keySelector);
+        return processor;
     }
 
     private JWKSource<SecurityContext> loadLocalJwkSourceUnchecked() {
@@ -167,5 +112,11 @@ public class PluginUserCertificateProviderTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private void setField(Object target, String fieldName, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 }
