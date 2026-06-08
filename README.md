@@ -49,6 +49,17 @@ https://github.com/ctyano/athenz-plugins/releases
 | athenz.auth.principal.auth.oidc.jwt.claim | sub | Claim name for the principal name |
 | athenz.auth.principal.auth.oidc.jwt.boot_time_offset | 300 | Boot time offset in seconds |
 
+### EmailClaimExternalMemberValidator
+
+Set the domain system meta `externalmembervalidator` to `com.yahoo.athenz.auth.impl.EmailClaimExternalMemberValidator` for the external member domain.
+
+When JWT `email` claim values are registered as Athenz role members, configure `OIDCJwtAuthority` with `athenz.auth.principal.auth.oidc.jwt.claim=email`. This validator then checks that the external member name is a valid email address and that its email domain is explicitly allowed.
+
+| Property | Default | Description |
+| --- | --- | --- |
+| athenz.auth.external_member.email.allowed_domains | | Comma-separated default allowlist of email domains. Use exact domains such as `example.com`; `*.example.com` allows subdomains only. |
+| athenz.auth.external_member.email.allowed_domains.\<athenz-domain\> | | Domain-specific allowlist. When set, it overrides the default allowlist for that Athenz domain. |
+
 ### UserCertificateProvider
 
 | Property | Default | Description |
