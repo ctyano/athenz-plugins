@@ -53,6 +53,7 @@ public class PluginUserCertificateProvider implements InstanceProvider {
     private String userNameClaim;
     private int connectTimeout;
     private int readTimeout;
+    private SSLContext sslContext;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private volatile ConfigurableJWTProcessor<SecurityContext> jwtProcessor;
@@ -65,6 +66,8 @@ public class PluginUserCertificateProvider implements InstanceProvider {
 
     @Override
     public void initialize(final String provider, final String providerEndpoint, final SSLContext sslContext, final KeyStore keyStore) {
+        this.sslContext = sslContext;
+
         final String idpConfigEndpoint = System.getProperty(USER_CERT_PROP_IDP_CONFIG_ENDPOINT);
         idpJwksEndpoint = System.getProperty(USER_CERT_PROP_IDP_JWKS_ENDPOINT);
 
@@ -197,7 +200,7 @@ public class PluginUserCertificateProvider implements InstanceProvider {
             if (StringUtil.isEmpty(idpJwksEndpoint)) {
                 return null;
             }
-            jwtProcessor = JwtsHelper.getJWTProcessor(new JwtsSigningKeyResolver(idpJwksEndpoint, null));
+            jwtProcessor = JwtsHelper.getJWTProcessor(new JwtsSigningKeyResolver(idpJwksEndpoint, sslContext, true));
             return jwtProcessor;
         }
     }
