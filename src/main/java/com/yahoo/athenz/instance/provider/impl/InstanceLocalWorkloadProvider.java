@@ -52,7 +52,7 @@ public class InstanceLocalWorkloadProvider implements InstanceProvider {
     public static final String LOCAL_WORKLOAD_PROP_BOOT_TIME_OFFSET =
             "athenz.zts.local_workload.boot_time_offset";
 
-    static final String DEFAULT_USER_NAME_CLAIM = "name";
+    static final String DEFAULT_USER_NAME_CLAIM = "athenz_user";
     static final String DEFAULT_USER_DOMAIN_TEMPLATE = "home.%s";
     static final long DEFAULT_BOOT_TIME_OFFSET_SECONDS = 0;
     static final String BEARER_PREFIX = "Bearer ";
@@ -79,19 +79,31 @@ public class InstanceLocalWorkloadProvider implements InstanceProvider {
         issuerConfigs.clear();
 
         audiences = parseCsvSet(System.getProperty(LOCAL_WORKLOAD_PROP_AUDIENCE));
+        if (audiences.isEmpty()) {
+            throw new IllegalArgumentException("Local workload audience must be configured");
+        }
         userNameClaim = System.getProperty(LOCAL_WORKLOAD_PROP_USER_NAME_CLAIM, DEFAULT_USER_NAME_CLAIM);
         userDomainTemplate = System.getProperty(LOCAL_WORKLOAD_PROP_USER_DOMAIN_TEMPLATE, DEFAULT_USER_DOMAIN_TEMPLATE);
+        if (StringUtil.isEmpty(userDomainTemplate) || !userDomainTemplate.contains("%s")) {
+            throw new IllegalArgumentException("User domain template must be configured and contain %s");
+        }
         bootTimeOffsetSeconds = parseLong(System.getProperty(LOCAL_WORKLOAD_PROP_BOOT_TIME_OFFSET),
                 DEFAULT_BOOT_TIME_OFFSET_SECONDS);
 
+        final Set<String> configuredIssuers = parseCsvSet(System.getProperty(LOCAL_WORKLOAD_PROP_ISSUER));
+        final String externalDomain = System.getProperty(LOCAL_WORKLOAD_PROP_EXTERNAL_DOMAIN);
+        for (String issuer : configuredIssuers) {
+            issuerConfigs.put(issuer, new IssuerConfig(issuer, null, externalDomain));
+        }
+
+        final String jwksUri = System.getProperty(LOCAL_WORKLOAD_PROP_JWKS_URI);
+        if (configuredIssuers.size() == 1 && !StringUtil.isEmpty(jwksUri) && !jwksUri.trim().isEmpty()) {
+            final String issuer = configuredIssuers.iterator().next();
+            issuerConfigs.put(issuer, new IssuerConfig(issuer, jwksUri.trim(), externalDomain));
+        }
+
         final Map<String, String> jwksUriMap = parseMap(System.getProperty(LOCAL_WORKLOAD_PROP_JWKS_URI_MAP));
         final Map<String, String> externalDomainMap = parseMap(System.getProperty(LOCAL_WORKLOAD_PROP_EXTERNAL_DOMAIN_MAP));
-
-        final Set<String> configuredIssuers = parseCsvSet(System.getProperty(LOCAL_WORKLOAD_PROP_ISSUER));
-        for (String issuer : configuredIssuers) {
-            issuerConfigs.put(issuer, new IssuerConfig(issuer, jwksUriMap.get(issuer),
-                    System.getProperty(LOCAL_WORKLOAD_PROP_EXTERNAL_DOMAIN)));
-        }
 
         for (Map.Entry<String, String> entry : externalDomainMap.entrySet()) {
             issuerConfigs.compute(entry.getKey(), (issuer, existingConfig) -> new IssuerConfig(issuer,
@@ -101,13 +113,6 @@ public class InstanceLocalWorkloadProvider implements InstanceProvider {
         for (Map.Entry<String, String> entry : jwksUriMap.entrySet()) {
             issuerConfigs.compute(entry.getKey(), (issuer, existingConfig) -> new IssuerConfig(issuer,
                     entry.getValue(), existingConfig == null ? null : existingConfig.externalDomain));
-        }
-
-        final String jwksUri = System.getProperty(LOCAL_WORKLOAD_PROP_JWKS_URI);
-        final String externalDomain = System.getProperty(LOCAL_WORKLOAD_PROP_EXTERNAL_DOMAIN);
-        if (configuredIssuers.size() == 1 && !StringUtil.isEmpty(jwksUri) && !jwksUri.trim().isEmpty()) {
-            final String issuer = configuredIssuers.iterator().next();
-            issuerConfigs.put(issuer, new IssuerConfig(issuer, jwksUri.trim(), externalDomain));
         }
     }
 
@@ -355,7 +360,7 @@ public class InstanceLocalWorkloadProvider implements InstanceProvider {
             return defaultValue;
         }
         try {
-            return Long.parseLong(propertyValue);
+            return Long.parseLong(propertyValue.trim());
         } catch (NumberFormatException ex) {
             LOG.warn("Invalid local workload long property value: {}, using default: {}", propertyValue, defaultValue);
             return defaultValue;

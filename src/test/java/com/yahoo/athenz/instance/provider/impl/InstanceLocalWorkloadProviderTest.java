@@ -103,6 +103,25 @@ public class InstanceLocalWorkloadProviderTest {
     }
 
     @Test
+    public void testSingleIssuerJwksUriPreservesExternalDomainMap() throws Exception {
+        final String jwksUri = Objects.requireNonNull(classLoader.getResource("jwt_jwks.json")).toString();
+        System.setProperty(InstanceLocalWorkloadProvider.LOCAL_WORKLOAD_PROP_ISSUER, ISSUER_EXTERNAL);
+        System.setProperty(InstanceLocalWorkloadProvider.LOCAL_WORKLOAD_PROP_JWKS_URI, jwksUri);
+        System.setProperty(InstanceLocalWorkloadProvider.LOCAL_WORKLOAD_PROP_AUDIENCE, AUDIENCE);
+        System.setProperty(InstanceLocalWorkloadProvider.LOCAL_WORKLOAD_PROP_EXTERNAL_DOMAIN_MAP,
+                ISSUER_EXTERNAL + "=external.dex.workloads");
+
+        InstanceLocalWorkloadProvider provider = newProvider();
+        InstanceConfirmation confirmation = newConfirmation("external.dex.workloads.team1", "api",
+                generateToken(ISSUER_EXTERNAL, AUDIENCE, null));
+
+        InstanceConfirmation result = provider.confirmInstance(confirmation);
+
+        assertNotNull(result);
+        assertEquals(result.getAttributes().get(InstanceProvider.ZTS_CERT_REFRESH), "false");
+    }
+
+    @Test
     public void testConfirmInstanceWithExternalIssuerRejectsWrongDomain() throws Exception {
         final String jwksUri = Objects.requireNonNull(classLoader.getResource("jwt_jwks.json")).toString();
         System.setProperty(InstanceLocalWorkloadProvider.LOCAL_WORKLOAD_PROP_AUDIENCE, AUDIENCE);
@@ -155,6 +174,40 @@ public class InstanceLocalWorkloadProviderTest {
             assertEquals(ex.getCode(), ProviderResourceException.FORBIDDEN);
             assertTrue(ex.getMessage().contains("Service credentials not provided"));
         }
+    }
+
+    @Test
+    public void testInitializeRequiresAudience() {
+        final String jwksUri = Objects.requireNonNull(classLoader.getResource("jwt_jwks.json")).toString();
+        System.setProperty(InstanceLocalWorkloadProvider.LOCAL_WORKLOAD_PROP_ISSUER, ISSUER);
+        System.setProperty(InstanceLocalWorkloadProvider.LOCAL_WORKLOAD_PROP_JWKS_URI, jwksUri);
+
+        try {
+            newProvider();
+            fail();
+        } catch (IllegalArgumentException ex) {
+            assertTrue(ex.getMessage().contains("audience must be configured"));
+        }
+    }
+
+    @Test
+    public void testInitializeRequiresUserDomainTemplatePlaceholder() {
+        configureSingleIssuer();
+        System.setProperty(InstanceLocalWorkloadProvider.LOCAL_WORKLOAD_PROP_USER_DOMAIN_TEMPLATE, "home.static");
+
+        try {
+            newProvider();
+            fail();
+        } catch (IllegalArgumentException ex) {
+            assertTrue(ex.getMessage().contains("contain %s"));
+        }
+    }
+
+    @Test
+    public void testParseLongTrimsValue() {
+        InstanceLocalWorkloadProvider provider = new InstanceLocalWorkloadProvider();
+
+        assertEquals(provider.parseLong(" 300 ", 0), 300);
     }
 
     @Test
