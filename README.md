@@ -72,3 +72,19 @@ When JWT `email` claim values are registered as Athenz role members, configure `
 | athenz.zts.user_cert.read_timeout | 5000 | Read timeout in milliseconds |
 
 The UserCertificateProvider expects the attestation data to contain the JWT access token issued by the IdP. It validates the token signature with the configured JWKS, checks the expected audience, and compares the configured user name claim with the requested Athenz principal.
+
+### InstanceLocalWorkloadProvider
+
+`InstanceLocalWorkloadProvider` accepts an OAuth/OIDC ID token as instance attestation data. It validates the JWT signature, issuer, audience, and standard time claims. If the configured user name claim is present, the requested service must be under that user's home domain. If the user name claim is absent, the issuer must map to an external-member Athenz domain, and the requested service must be under that domain.
+
+| Property | Default | Description |
+| --- | --- | --- |
+| athenz.zts.local_workload.issuer | | Comma-separated allowed issuer list. For a single issuer, this can be used with `athenz.zts.local_workload.jwks_uri` and `athenz.zts.local_workload.external_domain`. |
+| athenz.zts.local_workload.jwks_uri | | JWKS URI for the single configured issuer. If unset, the provider tries OIDC discovery and then `<issuer>/.well-known/jwks`. |
+| athenz.zts.local_workload.jwks_uri_map | | Semicolon-separated issuer to JWKS URI map. Example: `https://dex.example=jwks-uri;https://okta.example=jwks-uri`. |
+| athenz.zts.local_workload.audience | | Comma-separated accepted JWT audiences. |
+| athenz.zts.local_workload.user_name_claim | athenz_user | JWT claim containing the Athenz user name. `user.<name>` values are normalized to `<name>`. |
+| athenz.zts.local_workload.user_domain_template | home.%s | Root domain template for user-owned services. `%s` is required and is replaced with the normalized user name. Use values such as `home.%s.local` for child domains. |
+| athenz.zts.local_workload.external_domain | | External-member Athenz root domain for the single configured issuer. |
+| athenz.zts.local_workload.external_domain_map | | Semicolon-separated issuer to external-member root domain map. Example: `https://dex.example=external.dex;https://okta.example=external.okta`. |
+| athenz.zts.local_workload.boot_time_offset | 0 | Optional issue-time freshness window in seconds. `0` disables the `iat` freshness check. |
