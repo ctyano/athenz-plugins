@@ -25,7 +25,7 @@ public class EmailTokenExchangeIdentityProvider implements TokenExchangeIdentity
 
     @Override
     public String getTokenAudience(final OAuth2Token token) {
-        return token.getAudience();
+        return token == null ? null : token.getAudience();
     }
 
     @Override
