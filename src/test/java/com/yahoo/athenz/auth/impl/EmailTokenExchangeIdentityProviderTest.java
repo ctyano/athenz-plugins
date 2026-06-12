@@ -30,6 +30,13 @@ public class EmailTokenExchangeIdentityProviderTest {
     }
 
     @Test
+    public void testGetTokenIdentityReturnsNullWithNullToken() {
+        EmailTokenExchangeIdentityProvider provider = new EmailTokenExchangeIdentityProvider();
+
+        assertNull(provider.getTokenIdentity(null));
+    }
+
+    @Test
     public void testGetTokenIdentityReturnsNullWithBlankEmailClaim() {
         OAuth2Token token = new TestOAuth2Token("audience", Map.of("email", "  "));
 
@@ -45,6 +52,13 @@ public class EmailTokenExchangeIdentityProviderTest {
         EmailTokenExchangeIdentityProvider provider = new EmailTokenExchangeIdentityProvider();
 
         assertEquals(provider.getTokenAudience(token), "email.subdomain");
+    }
+
+    @Test
+    public void testGetTokenAudienceReturnsNullWithNullToken() {
+        EmailTokenExchangeIdentityProvider provider = new EmailTokenExchangeIdentityProvider();
+
+        assertNull(provider.getTokenAudience(null));
     }
 
     @Test

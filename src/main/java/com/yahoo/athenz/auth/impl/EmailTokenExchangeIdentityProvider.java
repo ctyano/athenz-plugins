@@ -10,12 +10,12 @@ import java.util.Locale;
 public class EmailTokenExchangeIdentityProvider implements TokenExchangeIdentityProvider {
 
     @Override
-    @Override
     public String getTokenIdentity(final OAuth2Token token) {
         if (token == null) {
             return null;
         }
         final Object emailClaim = token.getClaim("email");
+        if (emailClaim == null) {
             return null;
         }
 
