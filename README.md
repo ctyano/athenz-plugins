@@ -88,3 +88,23 @@ The UserCertificateProvider expects the attestation data to contain the JWT acce
 | athenz.zts.local_workload.external_domain | | External-member Athenz root domain for the single configured issuer. |
 | athenz.zts.local_workload.external_domain_map | | Semicolon-separated issuer to external-member root domain map. Example: `https://dex.example=external.dex;https://okta.example=external.okta`. |
 | athenz.zts.local_workload.boot_time_offset | 0 | Optional issue-time freshness window in seconds. `0` disables the `iat` freshness check. |
+
+### InstanceLocalAgentProvider
+
+`InstanceLocalAgentProvider` accepts an OAuth/OIDC ID token as Copper Argos attestation data for Local Agent service certificates. It validates the token signature, issuer, audience, and time claims. The provider allows issuance when either the verified token user maps to the requested service domain's home-domain owner, or a verified external member name from the token belongs to the requested domain's `admin` role.
+
+The provider resolves signing keys by OIDC Discovery from the token `iss` claim first. If the issuer's `.well-known/openid-configuration` cannot provide `jwks_uri`, it falls back to the configured JWKS endpoint.
+
+| Property | Default | Description |
+| --- | --- | --- |
+| athenz.zts.local_agent.issuer | | Optional comma-separated issuer allowlist. If unset, any issuer is accepted when its token can be verified. |
+| athenz.zts.local_agent.jwks_uri | | Fallback JWKS URI used when OIDC Discovery does not resolve a key endpoint. |
+| athenz.zts.local_agent.jwks_uri_map | | Semicolon-separated issuer to fallback JWKS URI map. Example: `https://dex.example=jwks-uri;https://okta.example=jwks-uri`. |
+| athenz.zts.local_agent.audience | | Required comma-separated accepted JWT audiences. |
+| athenz.zts.local_agent.user_name_claim | | Optional single JWT claim for the Athenz home-domain user name. Overrides `user_name_claims` when set. |
+| athenz.zts.local_agent.user_name_claims | athenz_user,preferred_username,name,sub | Ordered JWT claims checked for the Athenz home-domain user name. `user.<name>` values are normalized to `<name>`. |
+| athenz.zts.local_agent.user_domain_template | home.%s | Root domain template for user-owned services. `%s` is replaced with the normalized user name. |
+| athenz.zts.local_agent.external_member_claims | external_members,email,preferred_username,sub | JWT claims used as external member names for target-domain `admin` role checks. String and string-list claims are supported. |
+| athenz.zts.local_agent.external_member_template | %s | Optional template for external member names, for example `email:ext.%s`. The raw value is also checked. |
+| athenz.zts.local_agent.external_identity_provider_class | | Optional `TokenExchangeIdentityProvider` implementation used to map the verified ID token to an Athenz external member name before the `admin` role check. |
+| athenz.zts.local_agent.boot_time_offset | 0 | Optional issue-time freshness window in seconds. `0` disables the `iat` freshness check. |
