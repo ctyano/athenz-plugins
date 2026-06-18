@@ -21,13 +21,13 @@
     <buildtype>test</buildtype>
     <dependency.locations.enabled>false</dependency.locations.enabled>
     
-    <jetty.version>12.1.9</jetty.version>
+    <jetty.version>12.1.10</jetty.version>
     <jersey.version>2.35</jersey.version>
     <jackson.version>2.13.2</jackson.version>
     <jackson-databind.version>2.22.0</jackson-databind.version>
     <rdl.version>1.5.4</rdl.version>
     <bouncycastle.version>1.84</bouncycastle.version>
-    <springframework.security.version>7.0.5</springframework.security.version>
+    <springframework.security.version>7.1.0</springframework.security.version>
     <guava.version>33.6.0-jre</guava.version>
     <slf4j.version>2.0.18</slf4j.version>
     <logback.version>1.5.34</logback.version>
