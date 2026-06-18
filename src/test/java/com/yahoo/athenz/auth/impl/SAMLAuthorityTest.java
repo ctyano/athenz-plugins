@@ -78,6 +78,13 @@ public class SAMLAuthorityTest {
         System.clearProperty(prefix + "." + SAMLAuthority.PROP_NAME_ID_FORMAT);
         System.clearProperty(prefix + "." + SAMLAuthority.PROP_RECIPIENT);
         System.clearProperty(prefix + "." + SAMLAuthority.PROP_CLOCK_SKEW);
+        System.clearProperty(prefix + "." + SAMLAuthority.PROP_MAX_MESSAGE_SIZE);
+        System.clearProperty(prefix + "." + SAMLAuthority.PROP_MAX_ASSERTION_TTL);
+        System.clearProperty(prefix + "." + SAMLAuthority.PROP_PRINCIPAL_PATTERN);
+        System.clearProperty(prefix + "." + SAMLAuthority.PROP_REPLAY_CACHE);
+        System.clearProperty(prefix + "." + SAMLAuthority.PROP_REPLAY_CACHE_MAX_ENTRIES);
+        System.clearProperty(prefix + "." + SAMLAuthority.PROP_ALLOWED_SIGNATURE_ALGORITHMS);
+        System.clearProperty(prefix + "." + SAMLAuthority.PROP_ALLOWED_DIGEST_ALGORITHMS);
 
         for (Path tempFile : tempFiles) {
             Files.deleteIfExists(tempFile);
@@ -211,6 +218,68 @@ public class SAMLAuthorityTest {
 
         assertNull(principal);
         assertTrue(errMsg.toString().contains("expired"), errMsg.toString());
+    }
+
+    @Test
+    public void testAuthenticateRejectsReplay() throws Exception {
+        TestSamlContext context = setupAuthority();
+
+        String encodedResponse = encode(buildSignedResponse(context, "athenz-admin",
+                Instant.now().minusSeconds(30), Instant.now().plusSeconds(300),
+                AUDIENCE, ISSUER, true, null, null));
+
+        assertNotNull(context.authority.authenticate(encodedResponse, "127.0.0.1", "POST",
+                new StringBuilder()));
+
+        StringBuilder errMsg = new StringBuilder();
+        Principal principal = context.authority.authenticate(encodedResponse, "127.0.0.1", "POST", errMsg);
+
+        assertNull(principal);
+        assertTrue(errMsg.toString().contains("replay"), errMsg.toString());
+    }
+
+    @Test
+    public void testAuthenticateRejectsLongAssertionTtl() throws Exception {
+        TestSamlContext context = setupAuthority();
+
+        String encodedResponse = encode(buildSignedResponse(context, "athenz-admin",
+                Instant.now().minusSeconds(30), Instant.now().plusSeconds(7200),
+                AUDIENCE, ISSUER, true, null, null));
+
+        StringBuilder errMsg = new StringBuilder();
+        Principal principal = context.authority.authenticate(encodedResponse, "127.0.0.1", "POST", errMsg);
+
+        assertNull(principal);
+        assertTrue(errMsg.toString().contains("lifetime exceeds"), errMsg.toString());
+    }
+
+    @Test
+    public void testAuthenticateRejectsInvalidPrincipalName() throws Exception {
+        TestSamlContext context = setupAuthority();
+
+        String encodedResponse = encode(buildSignedResponse(context, "athenz/admin",
+                Instant.now().minusSeconds(30), Instant.now().plusSeconds(300),
+                AUDIENCE, ISSUER, true, null, null));
+
+        StringBuilder errMsg = new StringBuilder();
+        Principal principal = context.authority.authenticate(encodedResponse, "127.0.0.1", "POST", errMsg);
+
+        assertNull(principal);
+        assertTrue(errMsg.toString().contains("invalid principal name"), errMsg.toString());
+    }
+
+    @Test
+    public void testAuthenticateRejectsOversizedMessage() throws Exception {
+        final String prefix = SAMLAuthority.DEFAULT_PROPERTY_PREFIX;
+        System.setProperty(prefix + "." + SAMLAuthority.PROP_MAX_MESSAGE_SIZE, "64");
+        TestSamlContext context = setupAuthority();
+
+        StringBuilder errMsg = new StringBuilder();
+        Principal principal = context.authority.authenticate("a".repeat(65),
+                "127.0.0.1", "POST", errMsg);
+
+        assertNull(principal);
+        assertTrue(errMsg.toString().contains("maximum configured size"), errMsg.toString());
     }
 
     private TestSamlContext setupAuthority() throws Exception {

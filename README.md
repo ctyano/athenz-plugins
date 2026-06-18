@@ -66,6 +66,13 @@ https://github.com/ctyano/athenz-plugins/releases
 | athenz.auth.saml.name_id_format | | Optional required `NameID` format |
 | athenz.auth.saml.recipient | | Optional required `SubjectConfirmationData Recipient` |
 | athenz.auth.saml.clock_skew | 120 | Clock skew in seconds for SAML time checks |
+| athenz.auth.saml.max_message_size | 2097152 | Maximum accepted SAML credential/XML size in bytes |
+| athenz.auth.saml.max_assertion_ttl | 3600 | Maximum allowed assertion lifetime in seconds. Set `0` to disable. |
+| athenz.auth.saml.principal_pattern | [a-z0-9][a-z0-9._@-]* | Regex applied to the normalized principal name |
+| athenz.auth.saml.replay_cache | true | Enable in-memory Assertion ID replay detection |
+| athenz.auth.saml.replay_cache_max_entries | 10000 | Maximum in-memory replay cache entries |
+| athenz.auth.saml.allowed_signature_algorithms | RSA/ECDSA SHA-256/384/512 | Comma-separated XML Signature algorithm URI allowlist |
+| athenz.auth.saml.allowed_digest_algorithms | SHA-256/384/512 | Comma-separated XML Signature digest algorithm URI allowlist |
 
 ### EmailClaimExternalMemberValidator
 

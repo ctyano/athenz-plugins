@@ -31,6 +31,7 @@ import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -38,11 +39,37 @@ import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
+/**
+ * Authority implementation for validating SAML 2.0 Response or Assertion
+ * credentials and mapping the verified subject to an Athenz principal.
+ *
+ * <p>Operational limitations:
+ * <ul>
+ *   <li>This class does not implement a complete SAML SP flow. It does not
+ *       generate AuthnRequest messages, manage RelayState, provide an ACS
+ *       endpoint, or validate InResponseTo against a request store.</li>
+ *   <li>Replay protection is in-memory and local to this JVM. In a clustered
+ *       ZMS deployment, assertion replay detection is not shared across
+ *       nodes unless an external shared cache is added outside this class.</li>
+ *   <li>IdP signing certificates are loaded at initialization time. Certificate
+ *       rotation requires reinitializing this authority or restarting the
+ *       process unless the surrounding deployment provides a reload mechanism.</li>
+ *   <li>Certificate revocation status is not checked. Trust is based on the
+ *       configured certificate bundle and certificate validity dates.</li>
+ *   <li>Network and transport protections, such as TLS termination, header
+ *       stripping at proxies, and restricting who may supply SAML headers or
+ *       request parameters, must be enforced by the surrounding deployment.</li>
+ * </ul>
+ */
 public class SAMLAuthority implements Authority {
 
     private static final Logger LOG = LoggerFactory.getLogger(SAMLAuthority.class);
@@ -60,11 +87,23 @@ public class SAMLAuthority implements Authority {
     public static final String PROP_NAME_ID_FORMAT = "name_id_format";
     public static final String PROP_RECIPIENT = "recipient";
     public static final String PROP_CLOCK_SKEW = "clock_skew";
+    public static final String PROP_MAX_MESSAGE_SIZE = "max_message_size";
+    public static final String PROP_MAX_ASSERTION_TTL = "max_assertion_ttl";
+    public static final String PROP_PRINCIPAL_PATTERN = "principal_pattern";
+    public static final String PROP_REPLAY_CACHE = "replay_cache";
+    public static final String PROP_REPLAY_CACHE_MAX_ENTRIES = "replay_cache_max_entries";
+    public static final String PROP_ALLOWED_SIGNATURE_ALGORITHMS = "allowed_signature_algorithms";
+    public static final String PROP_ALLOWED_DIGEST_ALGORITHMS = "allowed_digest_algorithms";
 
     public static final String DEFAULT_HEADER = "X-SAML-Assertion";
     public static final String DEFAULT_REQUEST_PARAMETER = "SAMLResponse";
     public static final String DEFAULT_DOMAIN = "user";
     public static final long DEFAULT_CLOCK_SKEW_SECONDS = TimeUnit.SECONDS.convert(2, TimeUnit.MINUTES);
+    public static final int DEFAULT_MAX_MESSAGE_SIZE_BYTES = 2 * 1024 * 1024;
+    public static final long DEFAULT_MAX_ASSERTION_TTL_SECONDS = TimeUnit.SECONDS.convert(1, TimeUnit.HOURS);
+    public static final String DEFAULT_PRINCIPAL_PATTERN = "[a-z0-9][a-z0-9._@-]*";
+    public static final boolean DEFAULT_REPLAY_CACHE_ENABLED = true;
+    public static final int DEFAULT_REPLAY_CACHE_MAX_ENTRIES = 10000;
 
     static final String AUTHORITY_ID = "Auth-SAML";
     static final String SAML_ASSERTION_NS = "urn:oasis:names:tc:SAML:2.0:assertion";
@@ -72,6 +111,17 @@ public class SAMLAuthority implements Authority {
     static final String XML_SIGNATURE_NS = XMLSignature.XMLNS;
     static final String SAML_SUCCESS_STATUS = "urn:oasis:names:tc:SAML:2.0:status:Success";
     static final String SAML_BEARER_METHOD = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+    static final String DEFAULT_ALLOWED_SIGNATURE_ALGORITHMS =
+            "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256," +
+            "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384," +
+            "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512," +
+            "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256," +
+            "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha384," +
+            "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha512";
+    static final String DEFAULT_ALLOWED_DIGEST_ALGORITHMS =
+            "http://www.w3.org/2001/04/xmlenc#sha256," +
+            "http://www.w3.org/2001/04/xmldsig-more#sha384," +
+            "http://www.w3.org/2001/04/xmlenc#sha512";
 
     String headerName = DEFAULT_HEADER;
     String requestParameter = DEFAULT_REQUEST_PARAMETER;
@@ -83,8 +133,16 @@ public class SAMLAuthority implements Authority {
     String expectedNameIdFormat;
     String expectedRecipient;
     long clockSkewSeconds = DEFAULT_CLOCK_SKEW_SECONDS;
+    int maxMessageSizeBytes = DEFAULT_MAX_MESSAGE_SIZE_BYTES;
+    long maxAssertionTtlSeconds = DEFAULT_MAX_ASSERTION_TTL_SECONDS;
+    boolean replayCacheEnabled = DEFAULT_REPLAY_CACHE_ENABLED;
+    int replayCacheMaxEntries = DEFAULT_REPLAY_CACHE_MAX_ENTRIES;
     CredSource credSource = CredSource.HEADER;
     X509Certificate[] trustedCertificates = new X509Certificate[0];
+    Pattern principalPattern = Pattern.compile(DEFAULT_PRINCIPAL_PATTERN);
+    Set<String> allowedSignatureAlgorithms = parseCsvSet(DEFAULT_ALLOWED_SIGNATURE_ALGORITHMS);
+    Set<String> allowedDigestAlgorithms = parseCsvSet(DEFAULT_ALLOWED_DIGEST_ALGORITHMS);
+    final Map<String, Long> replayCache = new ConcurrentHashMap<>();
 
     protected String propertyPrefix() {
         return DEFAULT_PROPERTY_PREFIX;
@@ -104,6 +162,20 @@ public class SAMLAuthority implements Authority {
         expectedNameIdFormat = System.getProperty(prefix + "." + PROP_NAME_ID_FORMAT);
         expectedRecipient = System.getProperty(prefix + "." + PROP_RECIPIENT);
         clockSkewSeconds = parseClockSkewSeconds(System.getProperty(prefix + "." + PROP_CLOCK_SKEW));
+        maxMessageSizeBytes = parsePositiveInt(System.getProperty(prefix + "." + PROP_MAX_MESSAGE_SIZE),
+                DEFAULT_MAX_MESSAGE_SIZE_BYTES, PROP_MAX_MESSAGE_SIZE);
+        maxAssertionTtlSeconds = parseLong(System.getProperty(prefix + "." + PROP_MAX_ASSERTION_TTL),
+                DEFAULT_MAX_ASSERTION_TTL_SECONDS, PROP_MAX_ASSERTION_TTL);
+        replayCacheEnabled = Boolean.parseBoolean(System.getProperty(prefix + "." + PROP_REPLAY_CACHE,
+                Boolean.toString(DEFAULT_REPLAY_CACHE_ENABLED)));
+        replayCacheMaxEntries = parsePositiveInt(System.getProperty(prefix + "." + PROP_REPLAY_CACHE_MAX_ENTRIES),
+                DEFAULT_REPLAY_CACHE_MAX_ENTRIES, PROP_REPLAY_CACHE_MAX_ENTRIES);
+        principalPattern = parsePrincipalPattern(System.getProperty(prefix + "." + PROP_PRINCIPAL_PATTERN,
+                DEFAULT_PRINCIPAL_PATTERN), prefix);
+        allowedSignatureAlgorithms = parseCsvSet(System.getProperty(prefix + "." + PROP_ALLOWED_SIGNATURE_ALGORITHMS,
+                DEFAULT_ALLOWED_SIGNATURE_ALGORITHMS));
+        allowedDigestAlgorithms = parseCsvSet(System.getProperty(prefix + "." + PROP_ALLOWED_DIGEST_ALGORITHMS,
+                DEFAULT_ALLOWED_DIGEST_ALGORITHMS));
         credSource = parseCredSource(System.getProperty(prefix + "." + PROP_CRED_SOURCE));
 
         if (StringUtil.isEmpty(expectedIssuer)) {
@@ -159,8 +231,10 @@ public class SAMLAuthority implements Authority {
             return null;
         }
 
-        String samlMessage = request.getParameter(requestParameter);
-        if (StringUtil.isEmpty(samlMessage)) {
+        String samlMessage = null;
+        if (credSource == CredSource.REQUEST) {
+            samlMessage = request.getParameter(requestParameter);
+        } else {
             samlMessage = request.getHeader(headerName);
         }
         return authenticate(samlMessage, request.getRemoteAddr(), request.getMethod(), errMsg);
@@ -172,6 +246,10 @@ public class SAMLAuthority implements Authority {
 
         if (StringUtil.isEmpty(creds)) {
             errMsg.append("SAMLAuthority:authenticate: credentials are empty");
+            return null;
+        }
+        if (creds.length() > maxMessageSizeBytes) {
+            errMsg.append("SAMLAuthority:authenticate: credentials exceed maximum configured size");
             return null;
         }
 
@@ -193,6 +271,9 @@ public class SAMLAuthority implements Authority {
         if (isElement(root, SAML_PROTOCOL_NS, "Response")) {
             responseElement = root;
             if (!validateResponseStatus(responseElement, errMsg)) {
+                return null;
+            }
+            if (!validateResponseDestination(responseElement, errMsg)) {
                 return null;
             }
             final List<Element> assertions = getDirectChildElements(responseElement, SAML_ASSERTION_NS, "Assertion");
@@ -220,6 +301,9 @@ public class SAMLAuthority implements Authority {
         if (!validateConditions(assertionElement, errMsg)) {
             return null;
         }
+        if (!validateAssertionLifetime(assertionElement, errMsg)) {
+            return null;
+        }
         if (!validateSubjectConfirmation(assertionElement, errMsg)) {
             return null;
         }
@@ -230,7 +314,15 @@ public class SAMLAuthority implements Authority {
         }
 
         final long issueTime = parseIssueTimeSeconds(assertionElement);
-        final SimplePrincipal principal = getSimplePrincipal(principalName.toLowerCase(Locale.ROOT), creds, issueTime);
+        final String normalizedPrincipalName = principalName.toLowerCase(Locale.ROOT);
+        if (!principalPattern.matcher(normalizedPrincipalName).matches()) {
+            errMsg.append("SAMLAuthority:authenticate: invalid principal name: ").append(principalName);
+            return null;
+        }
+        if (!checkAndRecordReplay(assertionElement, errMsg)) {
+            return null;
+        }
+        final SimplePrincipal principal = getSimplePrincipal(normalizedPrincipalName, creds, issueTime);
         if (principal == null) {
             errMsg.append("SAMLAuthority:authenticate: failed to create principal: user=")
                     .append(principalName);
@@ -271,6 +363,58 @@ public class SAMLAuthority implements Authority {
         }
     }
 
+    long parseLong(final String configuredValue, final long defaultValue, final String propertyName) {
+        if (StringUtil.isEmpty(configuredValue)) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(configuredValue);
+        } catch (NumberFormatException ex) {
+            LOG.warn("Invalid SAML {} configured: {}, using default: {}",
+                    propertyName, configuredValue, defaultValue);
+            return defaultValue;
+        }
+    }
+
+    int parsePositiveInt(final String configuredValue, final int defaultValue, final String propertyName) {
+        if (StringUtil.isEmpty(configuredValue)) {
+            return defaultValue;
+        }
+        try {
+            final int value = Integer.parseInt(configuredValue);
+            if (value > 0) {
+                return value;
+            }
+        } catch (NumberFormatException ignored) {
+        }
+        LOG.warn("Invalid SAML {} configured: {}, using default: {}",
+                propertyName, configuredValue, defaultValue);
+        return defaultValue;
+    }
+
+    Pattern parsePrincipalPattern(final String configuredPattern, final String prefix) {
+        try {
+            return Pattern.compile(configuredPattern);
+        } catch (PatternSyntaxException ex) {
+            throw new IllegalStateException("Invalid regex for " + prefix + "." + PROP_PRINCIPAL_PATTERN
+                    + ": " + configuredPattern + " (" + ex.getDescription() + ")", ex);
+        }
+    }
+
+    static Set<String> parseCsvSet(final String configuredValue) {
+        final Set<String> values = new HashSet<>();
+        if (StringUtil.isEmpty(configuredValue)) {
+            return values;
+        }
+        for (String value : configuredValue.split(",")) {
+            final String trimmedValue = value.trim();
+            if (!trimmedValue.isEmpty()) {
+                values.add(trimmedValue);
+            }
+        }
+        return values;
+    }
+
     byte[] decodeSamlMessage(final String creds) throws IOException {
         String value = creds.trim();
         if (value.startsWith("SAML ")) {
@@ -285,6 +429,9 @@ public class SAMLAuthority implements Authority {
         }
 
         final byte[] decoded = Base64.getMimeDecoder().decode(value);
+        if (decoded.length > maxMessageSizeBytes) {
+            throw new IOException("decoded SAML message exceeds maximum configured size");
+        }
         if (startsWithXml(decoded)) {
             return decoded;
         }
@@ -308,6 +455,9 @@ public class SAMLAuthority implements Authority {
             int bytesRead;
             while ((bytesRead = inflater.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, bytesRead);
+                if (outputStream.size() > maxMessageSizeBytes) {
+                    throw new IOException("inflated SAML message exceeds maximum configured size");
+                }
             }
             return outputStream.toByteArray();
         }
@@ -373,6 +523,18 @@ public class SAMLAuthority implements Authority {
         return true;
     }
 
+    boolean validateResponseDestination(final Element responseElement, final StringBuilder errMsg) {
+        if (StringUtil.isEmpty(expectedRecipient)) {
+            return true;
+        }
+        final String destination = responseElement.getAttribute("Destination");
+        if (!StringUtil.isEmpty(destination) && !expectedRecipient.equals(destination)) {
+            errMsg.append("SAMLAuthority:authenticate: response destination does not match expected recipient");
+            return false;
+        }
+        return true;
+    }
+
     boolean validateSignature(final Element responseElement, final Element assertionElement, final StringBuilder errMsg) {
 
         if (hasDirectSignature(assertionElement) && validateElementSignature(assertionElement, errMsg)) {
@@ -406,7 +568,8 @@ public class SAMLAuthority implements Authority {
                         new DOMValidateContext(certificate.getPublicKey(), signatureElement);
                 validationContext.setProperty("org.jcp.xml.dsig.secureValidation", Boolean.TRUE);
                 final XMLSignature signature = signatureFactory.unmarshalXMLSignature(validationContext);
-                if (!signatureReferencesSignedElement(signature, signedElement)) {
+                if (!isAllowedSignatureAlgorithm(signature) ||
+                        !signatureOnlyReferencesSignedElement(signature, signedElement)) {
                     continue;
                 }
                 if (signature.validate(validationContext)) {
@@ -428,19 +591,31 @@ public class SAMLAuthority implements Authority {
         return false;
     }
 
-    boolean signatureReferencesSignedElement(final XMLSignature signature, final Element signedElement) {
+    boolean isAllowedSignatureAlgorithm(final XMLSignature signature) {
+        if (!allowedSignatureAlgorithms.contains(signature.getSignedInfo().getSignatureMethod().getAlgorithm())) {
+            return false;
+        }
+        for (Object referenceObject : signature.getSignedInfo().getReferences()) {
+            final Reference reference = (Reference) referenceObject;
+            if (!allowedDigestAlgorithms.contains(reference.getDigestMethod().getAlgorithm())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    boolean signatureOnlyReferencesSignedElement(final XMLSignature signature, final Element signedElement) {
         final String id = signedElement.getAttribute("ID");
         if (StringUtil.isEmpty(id)) {
             return false;
         }
-        final String expectedUri = "#" + id;
-        for (Object referenceObject : signature.getSignedInfo().getReferences()) {
-            final Reference reference = (Reference) referenceObject;
-            if (expectedUri.equals(reference.getURI())) {
-                return true;
-            }
+        final List<?> references = signature.getSignedInfo().getReferences();
+        if (references.size() != 1) {
+            return false;
         }
-        return false;
+        final String expectedUri = "#" + id;
+        final Reference reference = (Reference) references.get(0);
+        return expectedUri.equals(reference.getURI());
     }
 
     boolean validateIssuer(final Element responseElement, final Element assertionElement, final StringBuilder errMsg) {
@@ -484,6 +659,97 @@ public class SAMLAuthority implements Authority {
             return false;
         }
         return true;
+    }
+
+    boolean validateAssertionLifetime(final Element assertionElement, final StringBuilder errMsg) {
+        if (maxAssertionTtlSeconds <= 0) {
+            return true;
+        }
+
+        final String issueInstantValue = assertionElement.getAttribute("IssueInstant");
+        if (StringUtil.isEmpty(issueInstantValue)) {
+            errMsg.append("SAMLAuthority:authenticate: assertion does not contain IssueInstant");
+            return false;
+        }
+        final Instant issueInstant = parseSamlDateTime(issueInstantValue, errMsg);
+        if (issueInstant == null) {
+            return false;
+        }
+        if (issueInstant.isAfter(Instant.now().plusSeconds(clockSkewSeconds))) {
+            errMsg.append("SAMLAuthority:authenticate: assertion IssueInstant is in the future: ")
+                    .append(issueInstantValue);
+            return false;
+        }
+
+        final Instant notOnOrAfter = extractConditionsNotOnOrAfter(assertionElement, errMsg);
+        if (notOnOrAfter == null) {
+            return false;
+        }
+        if (!notOnOrAfter.isAfter(issueInstant)) {
+            errMsg.append("SAMLAuthority:authenticate: assertion NotOnOrAfter is not after IssueInstant");
+            return false;
+        }
+        if (Duration.between(issueInstant, notOnOrAfter).getSeconds() > maxAssertionTtlSeconds) {
+            errMsg.append("SAMLAuthority:authenticate: assertion lifetime exceeds maximum configured TTL");
+            return false;
+        }
+        return true;
+    }
+
+    Instant extractConditionsNotOnOrAfter(final Element assertionElement, final StringBuilder errMsg) {
+        final Element conditions = getFirstDirectChildElement(assertionElement, SAML_ASSERTION_NS, "Conditions");
+        if (conditions == null) {
+            errMsg.append("SAMLAuthority:authenticate: assertion does not contain Conditions");
+            return null;
+        }
+        final String notOnOrAfter = conditions.getAttribute("NotOnOrAfter");
+        if (StringUtil.isEmpty(notOnOrAfter)) {
+            errMsg.append("SAMLAuthority:authenticate: assertion conditions does not contain NotOnOrAfter");
+            return null;
+        }
+        return parseSamlDateTime(notOnOrAfter, errMsg);
+    }
+
+    boolean checkAndRecordReplay(final Element assertionElement, final StringBuilder errMsg) {
+        if (!replayCacheEnabled) {
+            return true;
+        }
+
+        final String assertionId = assertionElement.getAttribute("ID");
+        if (StringUtil.isEmpty(assertionId)) {
+            errMsg.append("SAMLAuthority:authenticate: assertion does not contain ID");
+            return false;
+        }
+
+        final Instant expiry = extractConditionsNotOnOrAfter(assertionElement, errMsg);
+        if (expiry == null) {
+            return false;
+        }
+        final long now = System.currentTimeMillis();
+        cleanupReplayCache(now);
+        if (replayCache.size() >= replayCacheMaxEntries) {
+            errMsg.append("SAMLAuthority:authenticate: replay cache is full");
+            return false;
+        }
+
+        final long replayExpiresAt = expiry.plusSeconds(clockSkewSeconds).toEpochMilli();
+        final Long existingExpiry = replayCache.putIfAbsent(assertionId, replayExpiresAt);
+        if (existingExpiry == null) {
+            return true;
+        }
+        if (existingExpiry > now) {
+            errMsg.append("SAMLAuthority:authenticate: assertion replay detected");
+            return false;
+        }
+        if (!replayCache.replace(assertionId, existingExpiry, replayExpiresAt)) {
+            errMsg.append("SAMLAuthority:authenticate: assertion replay cache update failed");
+            return false;
+        }
+        return true;
+    }
+
+    void cleanupReplayCache(final long now) {
+        replayCache.entrySet().removeIf(entry -> entry.getValue() <= now);
     }
 
     boolean validateSubjectConfirmation(final Element assertionElement, final StringBuilder errMsg) {
