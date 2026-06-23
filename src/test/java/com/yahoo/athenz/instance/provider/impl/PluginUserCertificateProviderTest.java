@@ -14,23 +14,40 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
+import com.yahoo.athenz.auth.token.jwts.JwtsSigningKeyResolver;
 import com.yahoo.athenz.auth.util.Crypto;
 import com.yahoo.athenz.instance.provider.InstanceConfirmation;
 import com.yahoo.athenz.instance.provider.ProviderResourceException;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
+import javax.net.ssl.SSLContext;
 import java.io.File;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
 import java.util.Date;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.testng.Assert.*;
 
 public class PluginUserCertificateProviderTest {
 
     private final File ecPrivateKey = new File("./src/test/resources/unit_test_ec_private.key");
+
+    @AfterMethod
+    public void clearProperties() {
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_CONFIG_ENDPOINT);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_USER_NAME_CLAIM);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_CONNECT_TIMEOUT);
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_READ_TIMEOUT);
+    }
 
     @Test
     public void testConfirmInstanceSuccess() throws Exception {
@@ -52,6 +69,44 @@ public class PluginUserCertificateProviderTest {
         assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_REFRESH), "false");
         assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_USAGE), "client");
         provider.close();
+    }
+
+    @Test
+    public void testConfirmInstanceBuildsJwtProcessorWithSslContextAndIdpJwksOnly() throws Exception {
+        final String jwksEndpoint = "https://oauth2.athenz/dex/keys";
+        final SSLContext sslContext = SSLContext.getDefault();
+        final AtomicReference<List<?>> constructedArguments = new AtomicReference<>();
+
+        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_JWKS_ENDPOINT, jwksEndpoint);
+        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_IDP_AUDIENCE, "athenz");
+        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_USER_NAME_CLAIM, "sub");
+
+        try (MockedConstruction<JwtsSigningKeyResolver> mockedResolvers =
+                     Mockito.mockConstruction(JwtsSigningKeyResolver.class, (mock, context) -> {
+                         constructedArguments.set(context.arguments());
+                         Mockito.when(mock.getKeySource()).thenReturn(loadLocalJwkSourceUnchecked());
+                     })) {
+
+            PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
+            try {
+                provider.initialize("sys.auth.usercertprovider", "", sslContext, null);
+
+                InstanceConfirmation confirmation = new InstanceConfirmation();
+                confirmation.setDomain("user");
+                confirmation.setService("john");
+                confirmation.setAttestationData(generateToken("athenz", "john"));
+
+                InstanceConfirmation result = provider.confirmInstance(confirmation);
+
+                assertNotNull(result);
+                assertEquals(mockedResolvers.constructed().size(), 1);
+                assertEquals(constructedArguments.get().get(0), jwksEndpoint);
+                assertSame(constructedArguments.get().get(1), sslContext);
+                assertEquals(constructedArguments.get().get(2), Boolean.TRUE);
+            } finally {
+                provider.close();
+            }
+        }
     }
 
     @Test
