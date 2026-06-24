@@ -3,6 +3,7 @@ package com.yahoo.athenz.instance.provider.impl;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
+import com.yahoo.athenz.auth.AuthorityConsts;
 import com.yahoo.athenz.auth.Authorizer;
 import com.yahoo.athenz.auth.KeyStore;
 import com.yahoo.athenz.auth.token.jwts.JwtsHelper;
@@ -24,7 +25,9 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -44,6 +47,7 @@ public class PluginUserCertificateProvider implements InstanceProvider {
     public static final String USER_CERT_PROP_READ_TIMEOUT        = "athenz.zts.user_cert.read_timeout";
 
     private static final String DEFAULT_USER_NAME_CLAIM = "sub";
+    private static final String EXTERNAL_SERVICE_PREFIX = "ext.";
     private static final int DEFAULT_TIMEOUT_MS = (int) TimeUnit.MILLISECONDS.convert(5, TimeUnit.SECONDS);
 
     private static final int HTTP_OK = 200;
@@ -172,11 +176,9 @@ public class PluginUserCertificateProvider implements InstanceProvider {
                 throw error("Token missing user name claim: " + userNameClaim, ProviderResourceException.FORBIDDEN);
             }
 
-            // The user name in Athenz can be "user.<name>" or just "<name>" depending on context.
-            // ZTS expected domain.service for the principal.
-            String expectedPrincipal = domain + "." + service;
-            if (!principalName.equalsIgnoreCase(service) && !principalName.equalsIgnoreCase(expectedPrincipal)) {
-                throw error("Token subject mismatch: " + principalName + " vs " + expectedPrincipal, ProviderResourceException.FORBIDDEN);
+            final List<String> expectedPrincipals = expectedPrincipalNames(domain, service);
+            if (!matchesPrincipal(principalName, expectedPrincipals)) {
+                throw error("Token subject mismatch: " + principalName + " vs " + expectedPrincipals, ProviderResourceException.FORBIDDEN);
             }
 
         } catch (ProviderResourceException e) {
@@ -184,6 +186,61 @@ public class PluginUserCertificateProvider implements InstanceProvider {
         } catch (Exception e) {
             throw error("Token validation failed: " + e.getMessage(), ProviderResourceException.FORBIDDEN);
         }
+    }
+
+    private boolean matchesPrincipal(final String principalName, final List<String> expectedPrincipals) {
+        for (String expectedPrincipal : expectedPrincipals) {
+            if (principalName.equalsIgnoreCase(expectedPrincipal)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> expectedPrincipalNames(final String domain, final String service) {
+        final List<String> expectedPrincipals = new ArrayList<>();
+        addExpectedPrincipal(expectedPrincipals, service);
+
+        if (StringUtil.isEmpty(domain) || StringUtil.isEmpty(service)) {
+            return expectedPrincipals;
+        }
+
+        final String externalLocalName = externalLocalName(domain, service);
+        if (!StringUtil.isEmpty(externalLocalName)) {
+            addExpectedPrincipal(expectedPrincipals, externalLocalName);
+            addExpectedPrincipal(expectedPrincipals, domain + AuthorityConsts.EXT_SEP + externalLocalName);
+        } else {
+            addExpectedPrincipal(expectedPrincipals, domain + AuthorityConsts.ATHENZ_PRINCIPAL_DELIMITER + service);
+        }
+        return expectedPrincipals;
+    }
+
+    private String externalLocalName(final String domain, final String service) {
+        final int idx = service.indexOf(AuthorityConsts.EXT_SEP);
+        if (idx != -1) {
+            final String externalDomain = service.substring(0, idx);
+            if (domain.equalsIgnoreCase(externalDomain)) {
+                return service.substring(idx + AuthorityConsts.EXT_SEP.length());
+            }
+            return null;
+        }
+
+        if (service.regionMatches(true, 0, EXTERNAL_SERVICE_PREFIX, 0, EXTERNAL_SERVICE_PREFIX.length())) {
+            return service.substring(EXTERNAL_SERVICE_PREFIX.length());
+        }
+        return null;
+    }
+
+    private void addExpectedPrincipal(final List<String> expectedPrincipals, final String principalName) {
+        if (StringUtil.isEmpty(principalName)) {
+            return;
+        }
+        for (String expectedPrincipal : expectedPrincipals) {
+            if (expectedPrincipal.equalsIgnoreCase(principalName)) {
+                return;
+            }
+        }
+        expectedPrincipals.add(principalName);
     }
 
     private ConfigurableJWTProcessor<SecurityContext> getJwtProcessor() {

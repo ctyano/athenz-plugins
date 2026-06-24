@@ -71,7 +71,7 @@ When JWT `email` claim values are registered as Athenz role members, configure `
 | athenz.zts.user_cert.connect_timeout | 5000 | Connection timeout in milliseconds |
 | athenz.zts.user_cert.read_timeout | 5000 | Read timeout in milliseconds |
 
-The UserCertificateProvider expects the attestation data to contain the JWT access token issued by the IdP. It validates the token signature with the configured JWKS, checks the expected audience, and compares the configured user name claim with the requested Athenz principal.
+The UserCertificateProvider expects the attestation data to contain the JWT access token issued by the IdP. It validates the token signature with the configured JWKS, checks the expected audience, and compares the configured user name claim with the requested Athenz principal. For external IDs such as `email:ext.user@example.com`, the configured claim may contain either the full external ID or the local external member value, for example `user@example.com`.
 
 ### InstanceLocalWorkloadProvider
 
