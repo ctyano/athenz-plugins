@@ -49,6 +49,31 @@ https://github.com/ctyano/athenz-plugins/releases
 | athenz.auth.principal.auth.oidc.jwt.claim | sub | Claim name for the principal name |
 | athenz.auth.principal.auth.oidc.jwt.boot_time_offset | 300 | Boot time offset in seconds |
 
+### SAMLAuthority
+
+`SAMLAuthority` validates a SAML 2.0 Response or Assertion and creates a principal from either `Subject/NameID` or a configured SAML attribute. The message may be supplied in a header, or in a request parameter such as `SAMLResponse` when `cred_source` is set to `REQUEST`.
+
+| Property | Default | Description |
+| --- | --- | --- |
+| athenz.auth.saml.header | X-SAML-Assertion | HTTP header name for header-based SAML credentials |
+| athenz.auth.saml.cred_source | HEADER | Credential source: `HEADER` or `REQUEST` |
+| athenz.auth.saml.request_parameter | SAMLResponse | Request parameter checked when `cred_source=REQUEST` |
+| athenz.auth.saml.domain | user | Athenz domain for the principal |
+| athenz.auth.saml.issuer | | Required SAML issuer/entity ID |
+| athenz.auth.saml.audience | | Required expected SAML Audience value |
+| athenz.auth.saml.certificate_file | | Required PEM certificate bundle used to verify SAML XML signatures |
+| athenz.auth.saml.name_attribute | | Optional SAML attribute `Name` or `FriendlyName` used as the principal name. If unset, `Subject/NameID` is used. |
+| athenz.auth.saml.name_id_format | | Optional required `NameID` format |
+| athenz.auth.saml.recipient | | Optional required `SubjectConfirmationData Recipient` |
+| athenz.auth.saml.clock_skew | 120 | Clock skew in seconds for SAML time checks |
+| athenz.auth.saml.max_message_size | 2097152 | Maximum accepted SAML credential/XML size in bytes |
+| athenz.auth.saml.max_assertion_ttl | 3600 | Maximum allowed assertion lifetime in seconds. Set `0` to disable. |
+| athenz.auth.saml.principal_pattern | [a-z0-9][a-z0-9._@-]* | Regex applied to the normalized principal name |
+| athenz.auth.saml.replay_cache | true | Enable in-memory Assertion ID replay detection |
+| athenz.auth.saml.replay_cache_max_entries | 10000 | Maximum in-memory replay cache entries |
+| athenz.auth.saml.allowed_signature_algorithms | RSA/ECDSA SHA-256/384/512 | Comma-separated XML Signature algorithm URI allowlist |
+| athenz.auth.saml.allowed_digest_algorithms | SHA-256/384/512 | Comma-separated XML Signature digest algorithm URI allowlist |
+
 ### EmailClaimExternalMemberValidator
 
 Set the domain system meta `externalmembervalidator` to `com.yahoo.athenz.auth.impl.EmailClaimExternalMemberValidator` for the external member domain.
