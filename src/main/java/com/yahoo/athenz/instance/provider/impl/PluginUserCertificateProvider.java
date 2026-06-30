@@ -210,6 +210,9 @@ public class PluginUserCertificateProvider implements InstanceProvider {
         if (issueTime == null) {
             throw error("Token does not contain required iat claim", ProviderResourceException.FORBIDDEN);
         }
+        if (issueTime.getTime() > System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(DEFAULT_CLOCK_SKEW_SECONDS)) {
+            throw error("Token issue time is in the future: " + issueTime, ProviderResourceException.FORBIDDEN);
+        }
         if (issueTime.getTime() <= System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(tokenExpiryMinutes)) {
             throw error("Token issue time is outside allowed window, issued at: " + issueTime,
                     ProviderResourceException.FORBIDDEN);
