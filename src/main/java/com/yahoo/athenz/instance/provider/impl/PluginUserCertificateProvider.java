@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -40,10 +41,13 @@ public class PluginUserCertificateProvider implements InstanceProvider {
     public static final String USER_CERT_PROP_IDP_JWKS_ENDPOINT   = "athenz.zts.user_cert.idp_jwks_endpoint";
     public static final String USER_CERT_PROP_IDP_AUDIENCE        = "athenz.zts.user_cert.idp_audience";
     public static final String USER_CERT_PROP_USER_NAME_CLAIM     = "athenz.zts.user_cert.user_name_claim";
+    public static final String USER_CERT_PROP_TOKEN_EXPIRY_MINUTES = "athenz.zts.user_cert.token_expiry_minutes";
     public static final String USER_CERT_PROP_CONNECT_TIMEOUT     = "athenz.zts.user_cert.connect_timeout";
     public static final String USER_CERT_PROP_READ_TIMEOUT        = "athenz.zts.user_cert.read_timeout";
 
     private static final String DEFAULT_USER_NAME_CLAIM = "sub";
+    private static final long DEFAULT_TOKEN_EXPIRY_MINUTES = 15;
+    private static final long DEFAULT_CLOCK_SKEW_SECONDS = 60;
     private static final int DEFAULT_TIMEOUT_MS = (int) TimeUnit.MILLISECONDS.convert(5, TimeUnit.SECONDS);
 
     private static final int HTTP_OK = 200;
@@ -51,6 +55,7 @@ public class PluginUserCertificateProvider implements InstanceProvider {
     private String idpJwksEndpoint;
     private String idpAudience;
     private String userNameClaim;
+    private long tokenExpiryMinutes = DEFAULT_TOKEN_EXPIRY_MINUTES;
     private int connectTimeout;
     private int readTimeout;
 
@@ -70,6 +75,7 @@ public class PluginUserCertificateProvider implements InstanceProvider {
 
         idpAudience = System.getProperty(USER_CERT_PROP_IDP_AUDIENCE);
         userNameClaim = System.getProperty(USER_CERT_PROP_USER_NAME_CLAIM, DEFAULT_USER_NAME_CLAIM);
+        tokenExpiryMinutes = parseTokenExpiryMinutes(System.getProperty(USER_CERT_PROP_TOKEN_EXPIRY_MINUTES));
 
         connectTimeout = Integer.getInteger(USER_CERT_PROP_CONNECT_TIMEOUT, DEFAULT_TIMEOUT_MS);
         readTimeout = Integer.getInteger(USER_CERT_PROP_READ_TIMEOUT, DEFAULT_TIMEOUT_MS);
@@ -154,9 +160,12 @@ public class PluginUserCertificateProvider implements InstanceProvider {
         if (processor == null) {
             throw error("JWT Processor not initialized", ProviderResourceException.INTERNAL_SERVER_ERROR);
         }
+        processor.setJWTClaimsSetVerifier(null);
 
         try {
             JWTClaimsSet claimsSet = processor.process(token, null);
+            validateNotBeforeTime(claimsSet);
+            validateIssueTime(claimsSet);
 
             // Validate Audience
             if (StringUtil.isEmpty(idpAudience)) {
@@ -186,6 +195,30 @@ public class PluginUserCertificateProvider implements InstanceProvider {
         }
     }
 
+    void validateNotBeforeTime(final JWTClaimsSet claimsSet) throws ProviderResourceException {
+        final Date notBeforeTime = claimsSet.getNotBeforeTime();
+        if (notBeforeTime == null) {
+            return;
+        }
+        if (notBeforeTime.getTime() > System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(DEFAULT_CLOCK_SKEW_SECONDS)) {
+            throw error("Token before use time: " + notBeforeTime, ProviderResourceException.FORBIDDEN);
+        }
+    }
+
+    void validateIssueTime(final JWTClaimsSet claimsSet) throws ProviderResourceException {
+        final Date issueTime = claimsSet.getIssueTime();
+        if (issueTime == null) {
+            throw error("Token does not contain required iat claim", ProviderResourceException.FORBIDDEN);
+        }
+        if (issueTime.getTime() > System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(DEFAULT_CLOCK_SKEW_SECONDS)) {
+            throw error("Token issue time is in the future: " + issueTime, ProviderResourceException.FORBIDDEN);
+        }
+        if (issueTime.getTime() <= System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(tokenExpiryMinutes)) {
+            throw error("Token issue time is outside allowed window, issued at: " + issueTime,
+                    ProviderResourceException.FORBIDDEN);
+        }
+    }
+
     private ConfigurableJWTProcessor<SecurityContext> getJwtProcessor() {
         if (jwtProcessor != null) {
             return jwtProcessor;
@@ -198,6 +231,7 @@ public class PluginUserCertificateProvider implements InstanceProvider {
                 return null;
             }
             jwtProcessor = JwtsHelper.getJWTProcessor(new JwtsSigningKeyResolver(idpJwksEndpoint, null));
+            jwtProcessor.setJWTClaimsSetVerifier(null);
             return jwtProcessor;
         }
     }
@@ -211,6 +245,23 @@ public class PluginUserCertificateProvider implements InstanceProvider {
                 LOG.error("Failed to close HTTP client: {}", e.getMessage());
             }
         }
+    }
+
+    long parseTokenExpiryMinutes(final String value) {
+        if (StringUtil.isEmpty(value)) {
+            return DEFAULT_TOKEN_EXPIRY_MINUTES;
+        }
+        try {
+            final long parsedValue = Long.parseLong(value.trim());
+            if (parsedValue > 0) {
+                return parsedValue;
+            }
+        } catch (NumberFormatException ignored) {
+            // log below with the original value
+        }
+        LOG.warn("Invalid user certificate token expiry minutes configured: {}, using default: {}",
+                value, DEFAULT_TOKEN_EXPIRY_MINUTES);
+        return DEFAULT_TOKEN_EXPIRY_MINUTES;
     }
 
     private ProviderResourceException error(String message, int code) {

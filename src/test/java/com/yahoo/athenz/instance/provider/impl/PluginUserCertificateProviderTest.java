@@ -17,6 +17,7 @@ import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import com.yahoo.athenz.auth.util.Crypto;
 import com.yahoo.athenz.instance.provider.InstanceConfirmation;
 import com.yahoo.athenz.instance.provider.ProviderResourceException;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -25,12 +26,18 @@ import java.lang.reflect.Field;
 import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 import static org.testng.Assert.*;
 
 public class PluginUserCertificateProviderTest {
 
     private final File ecPrivateKey = new File("./src/test/resources/unit_test_ec_private.key");
+
+    @AfterMethod
+    public void cleanup() {
+        System.clearProperty(PluginUserCertificateProvider.USER_CERT_PROP_TOKEN_EXPIRY_MINUTES);
+    }
 
     @Test
     public void testConfirmInstanceSuccess() throws Exception {
@@ -52,6 +59,121 @@ public class PluginUserCertificateProviderTest {
         assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_REFRESH), "false");
         assertEquals(result.getAttributes().get(PluginUserCertificateProvider.ZTS_CERT_USAGE), "client");
         provider.close();
+    }
+
+    @Test
+    public void testConfirmInstanceIgnoresExpirationClaim() throws Exception {
+        final long currentTimeMillis = System.currentTimeMillis();
+        String accessToken = generateToken("athenz", "john",
+                new Date(currentTimeMillis - TimeUnit.MINUTES.toMillis(1)),
+                new Date(currentTimeMillis - TimeUnit.MINUTES.toMillis(1)));
+
+        PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
+        setField(provider, "idpAudience", "athenz");
+        setField(provider, "userNameClaim", "sub");
+        setField(provider, "tokenExpiryMinutes", 5L);
+        setField(provider, "jwtProcessor", buildLocalJwtProcessor());
+
+        InstanceConfirmation confirmation = new InstanceConfirmation();
+        confirmation.setDomain("user");
+        confirmation.setService("john");
+        confirmation.setAttestationData(accessToken);
+
+        InstanceConfirmation result = provider.confirmInstance(confirmation);
+
+        assertNotNull(result);
+        provider.close();
+    }
+
+    @Test
+    public void testConfirmInstanceExpiresByIssueTime() throws Exception {
+        final long currentTimeMillis = System.currentTimeMillis();
+        String accessToken = generateToken("athenz", "john",
+                new Date(currentTimeMillis - TimeUnit.MINUTES.toMillis(6)),
+                new Date(currentTimeMillis + TimeUnit.HOURS.toMillis(1)));
+
+        PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
+        setField(provider, "idpAudience", "athenz");
+        setField(provider, "userNameClaim", "sub");
+        setField(provider, "tokenExpiryMinutes", 5L);
+        setField(provider, "jwtProcessor", buildLocalJwtProcessor());
+
+        InstanceConfirmation confirmation = new InstanceConfirmation();
+        confirmation.setDomain("user");
+        confirmation.setService("john");
+        confirmation.setAttestationData(accessToken);
+
+        try {
+            provider.confirmInstance(confirmation);
+            fail();
+        } catch (ProviderResourceException e) {
+            assertEquals(e.getCode(), ProviderResourceException.FORBIDDEN);
+            assertTrue(e.getMessage().contains("Token issue time is outside allowed window"));
+        } finally {
+            provider.close();
+        }
+    }
+
+    @Test
+    public void testConfirmInstanceRequiresIssueTime() throws Exception {
+        String accessToken = generateToken("athenz", "john",
+                null, new Date(System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1)));
+
+        PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
+        setField(provider, "idpAudience", "athenz");
+        setField(provider, "userNameClaim", "sub");
+        setField(provider, "jwtProcessor", buildLocalJwtProcessor());
+
+        InstanceConfirmation confirmation = new InstanceConfirmation();
+        confirmation.setDomain("user");
+        confirmation.setService("john");
+        confirmation.setAttestationData(accessToken);
+
+        try {
+            provider.confirmInstance(confirmation);
+            fail();
+        } catch (ProviderResourceException e) {
+            assertEquals(e.getCode(), ProviderResourceException.FORBIDDEN);
+            assertTrue(e.getMessage().contains("Token does not contain required iat claim"));
+        } finally {
+            provider.close();
+        }
+    }
+
+    @Test
+    public void testConfirmInstanceUsesConfiguredTokenExpiryMinutes() throws Exception {
+        final long currentTimeMillis = System.currentTimeMillis();
+        String accessToken = generateToken("athenz", "john",
+                new Date(currentTimeMillis - TimeUnit.MINUTES.toMillis(6)),
+                new Date(currentTimeMillis + TimeUnit.HOURS.toMillis(1)));
+
+        System.setProperty(PluginUserCertificateProvider.USER_CERT_PROP_TOKEN_EXPIRY_MINUTES, "10");
+
+        PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
+        provider.initialize("user_cert", null, null, null);
+        setField(provider, "idpAudience", "athenz");
+        setField(provider, "userNameClaim", "sub");
+        setField(provider, "jwtProcessor", buildLocalJwtProcessor());
+
+        InstanceConfirmation confirmation = new InstanceConfirmation();
+        confirmation.setDomain("user");
+        confirmation.setService("john");
+        confirmation.setAttestationData(accessToken);
+
+        InstanceConfirmation result = provider.confirmInstance(confirmation);
+
+        assertNotNull(result);
+        provider.close();
+    }
+
+    @Test
+    public void testParseTokenExpiryMinutes() {
+        PluginUserCertificateProvider provider = new PluginUserCertificateProvider();
+
+        assertEquals(provider.parseTokenExpiryMinutes(null), 15);
+        assertEquals(provider.parseTokenExpiryMinutes(" 10 "), 10);
+        assertEquals(provider.parseTokenExpiryMinutes("0"), 15);
+        assertEquals(provider.parseTokenExpiryMinutes("invalid"), 15);
     }
 
     @Test
@@ -84,14 +206,23 @@ public class PluginUserCertificateProviderTest {
     }
 
     private String generateToken(String audience, String subject) throws JOSEException {
+        return generateToken(audience, subject, new Date(),
+                new Date(System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1)));
+    }
+
+    private String generateToken(String audience, String subject, Date issueTime, Date expirationTime) throws JOSEException {
         PrivateKey privateKey = Crypto.loadPrivateKey(ecPrivateKey);
         ECDSASigner signer = new ECDSASigner((ECPrivateKey) privateKey);
-        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
-                .expirationTime(new Date(System.currentTimeMillis() + 3600 * 1000))
+        JWTClaimsSet.Builder claimsSetBuilder = new JWTClaimsSet.Builder()
                 .audience(audience)
-                .subject(subject)
-                .issueTime(new Date())
-                .build();
+                .subject(subject);
+        if (issueTime != null) {
+            claimsSetBuilder.issueTime(issueTime);
+        }
+        if (expirationTime != null) {
+            claimsSetBuilder.expirationTime(expirationTime);
+        }
+        JWTClaimsSet claimsSet = claimsSetBuilder.build();
 
         SignedJWT signedJWT = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.ES256).keyID("eckey1").build(),
                 claimsSet);
@@ -103,6 +234,7 @@ public class PluginUserCertificateProviderTest {
         DefaultJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
         JWSKeySelector<SecurityContext> keySelector = new JWSVerificationKeySelector<>(JWSAlgorithm.ES256, loadLocalJwkSourceUnchecked());
         processor.setJWSKeySelector(keySelector);
+        processor.setJWTClaimsSetVerifier(null);
         return processor;
     }
 
