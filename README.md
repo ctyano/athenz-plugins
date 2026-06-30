@@ -68,10 +68,11 @@ When JWT `email` claim values are registered as Athenz role members, configure `
 | athenz.zts.user_cert.idp_jwks_endpoint | | OIDC JWKS endpoint for the IdP |
 | athenz.zts.user_cert.idp_audience | | Expected audience for the JWT access token |
 | athenz.zts.user_cert.user_name_claim | sub | Claim name for the user name |
+| athenz.zts.user_cert.token_expiry_minutes | 15 | Maximum allowed age of the attestation JWT in minutes, evaluated from the `iat` claim |
 | athenz.zts.user_cert.connect_timeout | 5000 | Connection timeout in milliseconds |
 | athenz.zts.user_cert.read_timeout | 5000 | Read timeout in milliseconds |
 
-The UserCertificateProvider expects the attestation data to contain the JWT access token issued by the IdP. It validates the token signature with the configured JWKS, checks the expected audience, and compares the configured user name claim with the requested Athenz principal.
+The UserCertificateProvider expects the attestation data to contain the JWT access token issued by the IdP. It validates the token signature with the configured JWKS, checks the expected audience, rejects tokens older than the configured number of minutes based on the `iat` claim, and compares the configured user name claim with the requested Athenz principal.
 
 ### InstanceLocalWorkloadProvider
 
