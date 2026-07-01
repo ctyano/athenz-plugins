@@ -74,6 +74,29 @@ When JWT `email` claim values are registered as Athenz role members, configure `
 
 The UserCertificateProvider expects the attestation data to contain the JWT access token issued by the IdP. It validates the token signature with the configured JWKS, checks the expected audience, rejects tokens older than the configured number of minutes based on the `iat` claim, and compares the configured user name claim with the requested Athenz principal.
 
+### VaultCertSigner / VaultCertSignerFactory
+
+`VaultCertSignerFactory` creates a `VaultCertSigner` that requests certificate issuance from [Hashicorp Vault PKI Secret Engine](https://developer.hashicorp.com/vault/docs/secrets/pki).
+
+The signer authenticates to Vault via **AppRole** (`POST /v1/auth/{mount}/login` with `role_id` and `secret_id`) and dynamically obtains a client token. The token is cached and automatically refreshed on 401 responses.
+
+Configure ZTS to use this factory class:
+
+```
+athenz.zts.cert_signer_factory_class=com.yahoo.athenz.common.server.cert.impl.vault.VaultCertSignerFactory
+```
+
+| Property | Default | Description |
+| --- | --- | --- |
+| athenz.zts.vault.base_uri | | Vault server URL (required). Example: `https://vault.example.com:8200` |
+| athenz.zts.vault.approle_role_id | | AppRole Role ID (required) |
+| athenz.zts.vault.approle_secret_id | | AppRole Secret ID (required) |
+| athenz.zts.vault.approle_mount_path | approle | AppRole authentication mount path |
+| athenz.zts.vault.pki_path | pki | PKI secret engine mount path |
+| athenz.zts.vault.role_name | athenz | PKI role name for certificate signing |
+| athenz.zts.vault.connect_timeout | 10 | Connection timeout in seconds |
+| athenz.zts.certsign_max_expiry_time | 43200 | Maximum certificate expiry time in minutes (default 30 days) |
+
 ### InstanceLocalWorkloadProvider
 
 `InstanceLocalWorkloadProvider` accepts an OAuth/OIDC ID token as instance attestation data. It validates the JWT signature, issuer, audience, and standard time claims. If the configured user name claim is present, the requested service must be under that user's home domain. If the user name claim is absent, the issuer must map to an external-member Athenz domain, and the requested service must be under that domain.
