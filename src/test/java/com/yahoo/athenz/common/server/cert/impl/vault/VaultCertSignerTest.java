@@ -173,7 +173,7 @@ public class VaultCertSignerTest {
             }
             @Override
             String sendHttpRequest(String uri, String jsonBody) throws IOException {
-                assertFalse(jsonBody.contains("\"ttl\""));
+                assertTrue(jsonBody.contains("\"ttl\":\"30m\""));
                 return vaultResponse;
             }
         };
@@ -221,6 +221,21 @@ public class VaultCertSignerTest {
             @Override
             HttpResponse<String> doPost(String uri, String jsonBody, String token) {
                 return new StubHttpResponse(401, "");
+            }
+        };
+
+        String result = signer.generateX509Certificate("provider", null, TEST_CSR,
+                null, 360, null, null);
+        assertNull(result);
+    }
+
+    @Test
+    public void testSendHttpRequestNullToken() throws Exception {
+        VaultCertSigner signer = new VaultCertSigner(null, "https://vault.example.com:8200",
+                "pki", "athenz", "role-id", "secret-id", "approle", 43200) {
+            @Override
+            String getVaultToken() {
+                return null;
             }
         };
 
@@ -282,7 +297,7 @@ public class VaultCertSignerTest {
             }
         };
 
-        assertEquals(signer.getCACertificate("provider", null), ca1 + ca2);
+        assertEquals(signer.getCACertificate("provider", null), ca1 + "\n" + ca2 + "\n");
     }
 
     @Test
@@ -332,6 +347,19 @@ public class VaultCertSignerTest {
             @Override
             String sendHttpGetRequest(String uri) throws IOException {
                 throw new IOException("connection failed");
+            }
+        };
+
+        assertNull(signer.getCACertificate("provider", null));
+    }
+
+    @Test
+    public void testGetCACertificateNullToken() throws Exception {
+        VaultCertSigner signer = new VaultCertSigner(null, "https://vault.example.com:8200",
+                "pki", "athenz", "role-id", "secret-id", "approle", 43200) {
+            @Override
+            String getVaultToken() {
+                return null;
             }
         };
 

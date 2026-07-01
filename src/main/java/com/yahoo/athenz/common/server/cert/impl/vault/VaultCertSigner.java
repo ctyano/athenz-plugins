@@ -99,8 +99,12 @@ public class VaultCertSigner implements CertSigner {
 
         Map<String, Object> requestBody = new LinkedHashMap<>();
         requestBody.put("csr", csr);
-        if (expiryTime > 0 && expiryTime < maxCertExpiryTimeMins) {
-            requestBody.put("ttl", expiryTime + "m");
+        int ttl = expiryTime;
+        if (ttl > maxCertExpiryTimeMins) {
+            ttl = maxCertExpiryTimeMins;
+        }
+        if (ttl > 0) {
+            requestBody.put("ttl", ttl + "m");
         }
 
         if (LOGGER.isDebugEnabled()) {
@@ -122,6 +126,9 @@ public class VaultCertSigner implements CertSigner {
 
     String sendHttpRequest(String uri, String jsonBody) throws IOException {
         String token = getVaultToken();
+        if (token == null) {
+            return null;
+        }
         HttpResponse<String> response = doPost(uri, jsonBody, token);
 
         if (response == null) {
@@ -130,7 +137,11 @@ public class VaultCertSigner implements CertSigner {
 
         if (response.statusCode() == 401) {
             LOGGER.info("VaultCertSigner: token expired, re-authenticating");
-            vaultToken = null;
+            synchronized (this) {
+                if (token.equals(vaultToken)) {
+                    vaultToken = null;
+                }
+            }
             token = getVaultToken();
             if (token == null) {
                 return null;
@@ -148,6 +159,9 @@ public class VaultCertSigner implements CertSigner {
 
     String sendHttpGetRequest(String uri) throws IOException {
         String token = getVaultToken();
+        if (token == null) {
+            return null;
+        }
         HttpResponse<String> response = doGet(uri, token);
 
         if (response == null) {
@@ -156,7 +170,11 @@ public class VaultCertSigner implements CertSigner {
 
         if (response.statusCode() == 401) {
             LOGGER.info("VaultCertSigner: token expired, re-authenticating");
-            vaultToken = null;
+            synchronized (this) {
+                if (token.equals(vaultToken)) {
+                    vaultToken = null;
+                }
+            }
             token = getVaultToken();
             if (token == null) {
                 return null;
@@ -309,7 +327,11 @@ public class VaultCertSigner implements CertSigner {
                 StringBuilder sb = new StringBuilder(4096);
                 for (Object cert : (Iterable<?>) caChain) {
                     if (cert != null) {
-                        sb.append(cert.toString());
+                        String certStr = cert.toString();
+                        sb.append(certStr);
+                        if (!certStr.endsWith("\n")) {
+                            sb.append("\n");
+                        }
                     }
                 }
                 return sb.toString();
@@ -334,10 +356,5 @@ public class VaultCertSigner implements CertSigner {
     }
 
     @Override
-    public void close() {
-        try {
-            httpClient.close();
-        } catch (Exception ignored) {
-        }
-    }
+    public void close() {}
 }
