@@ -24,13 +24,13 @@
     <jetty.version>12.1.13</jetty.version>
     <jersey.version>2.35</jersey.version>
     <jackson.version>2.13.2</jackson.version>
-    <jackson-databind.version>2.22.2</jackson-databind.version>
+    <jackson-databind.version>2.22.3</jackson-databind.version>
     <rdl.version>1.5.4</rdl.version>
     <bouncycastle.version>1.86</bouncycastle.version>
     <springframework.security.version>7.1.1</springframework.security.version>
     <guava.version>33.7.1-jre</guava.version>
-    <slf4j.version>2.0.19</slf4j.version>
-    <logback.version>1.6.3</logback.version>
+    <slf4j.version>2.0.20</slf4j.version>
+    <logback.version>1.6.4</logback.version>
     <javax.version>4.0.1</javax.version>
     <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
     <mockito.version>5.2.0</mockito.version>
