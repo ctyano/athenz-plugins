@@ -28,9 +28,9 @@
     <rdl.version>1.5.4</rdl.version>
     <bouncycastle.version>1.86</bouncycastle.version>
     <springframework.security.version>7.1.1</springframework.security.version>
-    <guava.version>33.7.1-jre</guava.version>
+    <guava.version>33.7.2-jre</guava.version>
     <slf4j.version>2.0.20</slf4j.version>
-    <logback.version>1.6.4</logback.version>
+    <logback.version>1.6.5</logback.version>
     <javax.version>4.0.1</javax.version>
     <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
     <mockito.version>5.2.0</mockito.version>
