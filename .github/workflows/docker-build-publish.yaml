@@ -22,7 +22,7 @@ env:
   DOCKER_BUILD_ARGS: |
     VERSION=0.0.0
     ATHENZ_VERSION=
-    JAVA_VERSION=11
+    JAVA_VERSION=17
   TRACKING_GIT_REPO: AthenZ/athenz
 
 jobs:
