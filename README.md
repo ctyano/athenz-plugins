@@ -37,6 +37,23 @@ https://github.com/ctyano/athenz-plugins/releases
 
 ## Configuration
 
+### SPIFFECertificateAuthority
+
+Add `com.yahoo.athenz.auth.impl.SPIFFECertificateAuthority` to the configured `athenz.zms.authority_classes` or `athenz.zts.authority_classes` list. The server must validate client certificates through mTLS. This authority reads the service identity from the certificate's single SPIFFE URI SAN and rejects certificates with a subject Common Name or role URI.
+
+The default namespaced format follows Athenz `SpiffeUriTrustDomain`: `spiffe://<trust-domain>/ns/<namespace>/sa/<athenz-domain>.<service>`. It splits the final segment at the last dot, as Athenz does for certificate service principals. Set `namespace_as_domain=true` for certificates using `spiffe://<trust-domain>/ns/<athenz-domain>/sa/<service>`. The Athenz `SpiffeUriBasic` format, `spiffe://<athenz-domain>/sa/<service>`, requires `allow_global_spiffe_id=true`.
+
+| Property | Default | Description |
+| --- | --- | --- |
+| athenz.auth.certificate.spiffe.authorized_trust_domains | | Comma-separated SPIFFE trust domains allowed for namespaced URIs. Required for those URIs. |
+| athenz.auth.certificate.spiffe.namespace_as_domain | false | Interpret the `ns` segment as the Athenz domain instead of reading the domain and service from the final segment. |
+| athenz.auth.certificate.spiffe.allow_global_spiffe_id | false | Allow the basic URI format with the Athenz domain as the URI authority. |
+| athenz.auth.certificate.spiffe.excluded_principals | | Comma-separated service principals to reject, in `<domain>.<service>` form. |
+| athenz.auth.certificate.excluded_principals | | Standard Athenz certificate principal exclusions; these also apply to this authority. |
+| athenz.authority.truststore.path | | Standard Athenz PEM bundle used to filter certificate issuer DNs. Configure the server's mTLS trust separately. |
+
+The source implementation's `trusted_issuers` CN list is replaced by the standard Athenz issuer DN filter. The filter checks issuer names; certificate chain validation remains the TLS server's responsibility.
+
 ### OIDCJwtAuthority
 
 | Property | Default | Description |
